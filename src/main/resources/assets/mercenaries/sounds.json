@@ -1,0 +1,704 @@
+{
+  "weapon.scattergun.fire": {
+    "sounds": [
+      {
+        "name": "minecraft:entity.generic.explode",
+        "type": "event",
+        "volume": 0.6
+      }
+    ]
+  },
+  "weapon.force_a_nature.fire": {
+    "sounds": [
+      {
+        "name": "minecraft:entity.generic.explode",
+        "type": "event",
+        "volume": 0.6
+      }
+    ]
+  },
+  "weapon.pistol.fire": {
+    "sounds": [
+      {
+        "name": "minecraft:entity.generic.explode",
+        "type": "event",
+        "volume": 0.6
+      }
+    ]
+  },
+  "weapon.bonk.fire": {
+    "sounds": [
+      {
+        "name": "minecraft:entity.generic.eat",
+        "type": "event",
+        "volume": 0.6
+      }
+    ]
+  },
+  "weapon.bat.fire": {
+    "sounds": [
+      {
+        "name": "minecraft:entity.player.attack.sweep",
+        "type": "event",
+        "volume": 0.6
+      }
+    ]
+  },
+  "weapon.sandman.fire": {
+    "sounds": [
+      {
+        "name": "minecraft:entity.player.attack.sweep",
+        "type": "event",
+        "volume": 0.6
+      }
+    ]
+  },
+  "weapon.rocket_launcher.fire": {
+    "sounds": [
+      {
+        "name": "minecraft:entity.firework_rocket.launch",
+        "type": "event",
+        "volume": 0.6
+      }
+    ]
+  },
+  "weapon.direct_hit.fire": {
+    "sounds": [
+      {
+        "name": "minecraft:entity.firework_rocket.launch",
+        "type": "event",
+        "volume": 0.6
+      }
+    ]
+  },
+  "weapon.black_box.fire": {
+    "sounds": [
+      {
+        "name": "minecraft:entity.firework_rocket.launch",
+        "type": "event",
+        "volume": 0.6
+      }
+    ]
+  },
+  "weapon.shotgun.fire": {
+    "sounds": [
+      {
+        "name": "minecraft:entity.generic.explode",
+        "type": "event",
+        "volume": 0.6
+      }
+    ]
+  },
+  "weapon.gunboats.fire": {
+    "sounds": [
+      {
+        "name": "minecraft:entity.player.attack.sweep",
+        "type": "event",
+        "volume": 0.6
+      }
+    ]
+  },
+  "weapon.shovel.fire": {
+    "sounds": [
+      {
+        "name": "minecraft:entity.player.attack.sweep",
+        "type": "event",
+        "volume": 0.6
+      }
+    ]
+  },
+  "weapon.equalizer.fire": {
+    "sounds": [
+      {
+        "name": "minecraft:entity.player.attack.sweep",
+        "type": "event",
+        "volume": 0.6
+      }
+    ]
+  },
+  "weapon.flamethrower.fire": {
+    "sounds": [
+      {
+        "name": "minecraft:item.firecharge.use",
+        "type": "event",
+        "volume": 0.6
+      }
+    ]
+  },
+  "weapon.backburner.fire": {
+    "sounds": [
+      {
+        "name": "minecraft:item.firecharge.use",
+        "type": "event",
+        "volume": 0.6
+      }
+    ]
+  },
+  "weapon.flare_gun.fire": {
+    "sounds": [
+      {
+        "name": "minecraft:item.firecharge.use",
+        "type": "event",
+        "volume": 0.6
+      }
+    ]
+  },
+  "weapon.fire_axe.fire": {
+    "sounds": [
+      {
+        "name": "minecraft:entity.player.attack.sweep",
+        "type": "event",
+        "volume": 0.6
+      }
+    ]
+  },
+  "weapon.axtinguisher.fire": {
+    "sounds": [
+      {
+        "name": "minecraft:entity.player.attack.sweep",
+        "type": "event",
+        "volume": 0.6
+      }
+    ]
+  },
+  "weapon.grenade_launcher.fire": {
+    "sounds": [
+      {
+        "name": "minecraft:entity.snowball.throw",
+        "type": "event",
+        "volume": 0.6
+      }
+    ]
+  },
+  "weapon.loch_n_load.fire": {
+    "sounds": [
+      {
+        "name": "minecraft:entity.snowball.throw",
+        "type": "event",
+        "volume": 0.6
+      }
+    ]
+  },
+  "weapon.stickybomb_launcher.fire": {
+    "sounds": [
+      {
+        "name": "minecraft:entity.snowball.throw",
+        "type": "event",
+        "volume": 0.6
+      }
+    ]
+  },
+  "weapon.scottish_resistance.fire": {
+    "sounds": [
+      {
+        "name": "minecraft:entity.snowball.throw",
+        "type": "event",
+        "volume": 0.6
+      }
+    ]
+  },
+  "weapon.bottle.fire": {
+    "sounds": [
+      {
+        "name": "minecraft:entity.player.attack.sweep",
+        "type": "event",
+        "volume": 0.6
+      }
+    ]
+  },
+  "weapon.eyelander.fire": {
+    "sounds": [
+      {
+        "name": "minecraft:entity.player.attack.sweep",
+        "type": "event",
+        "volume": 0.6
+      }
+    ]
+  },
+  "weapon.minigun.fire": {
+    "sounds": [
+      {
+        "name": "minecraft:entity.generic.explode",
+        "type": "event",
+        "volume": 0.6
+      }
+    ]
+  },
+  "weapon.natascha.fire": {
+    "sounds": [
+      {
+        "name": "minecraft:entity.generic.explode",
+        "type": "event",
+        "volume": 0.6
+      }
+    ]
+  },
+  "weapon.tomislav.fire": {
+    "sounds": [
+      {
+        "name": "minecraft:entity.generic.explode",
+        "type": "event",
+        "volume": 0.6
+      }
+    ]
+  },
+  "weapon.sandvich.fire": {
+    "sounds": [
+      {
+        "name": "minecraft:entity.generic.eat",
+        "type": "event",
+        "volume": 0.6
+      }
+    ]
+  },
+  "weapon.heavy_shotgun.fire": {
+    "sounds": [
+      {
+        "name": "minecraft:entity.generic.explode",
+        "type": "event",
+        "volume": 0.6
+      }
+    ]
+  },
+  "weapon.fists.fire": {
+    "sounds": [
+      {
+        "name": "minecraft:entity.player.attack.sweep",
+        "type": "event",
+        "volume": 0.6
+      }
+    ]
+  },
+  "weapon.gru.fire": {
+    "sounds": [
+      {
+        "name": "minecraft:entity.player.attack.sweep",
+        "type": "event",
+        "volume": 0.6
+      }
+    ]
+  },
+  "weapon.engineer_shotgun.fire": {
+    "sounds": [
+      {
+        "name": "minecraft:entity.generic.explode",
+        "type": "event",
+        "volume": 0.6
+      }
+    ]
+  },
+  "weapon.frontier_justice.fire": {
+    "sounds": [
+      {
+        "name": "minecraft:entity.generic.explode",
+        "type": "event",
+        "volume": 0.6
+      }
+    ]
+  },
+  "weapon.engineer_pistol.fire": {
+    "sounds": [
+      {
+        "name": "minecraft:entity.generic.explode",
+        "type": "event",
+        "volume": 0.6
+      }
+    ]
+  },
+  "weapon.wrench.fire": {
+    "sounds": [
+      {
+        "name": "minecraft:entity.player.attack.sweep",
+        "type": "event",
+        "volume": 0.6
+      }
+    ]
+  },
+  "weapon.gunslinger.fire": {
+    "sounds": [
+      {
+        "name": "minecraft:entity.player.attack.sweep",
+        "type": "event",
+        "volume": 0.6
+      }
+    ]
+  },
+  "weapon.syringe_gun.fire": {
+    "sounds": [
+      {
+        "name": "minecraft:entity.arrow.shoot",
+        "type": "event",
+        "volume": 0.6
+      }
+    ]
+  },
+  "weapon.blutsauger.fire": {
+    "sounds": [
+      {
+        "name": "minecraft:entity.arrow.shoot",
+        "type": "event",
+        "volume": 0.6
+      }
+    ]
+  },
+  "weapon.medigun.fire": {
+    "sounds": [
+      {
+        "name": "minecraft:block.beacon.ambient",
+        "type": "event",
+        "volume": 0.6
+      }
+    ]
+  },
+  "weapon.kritzkrieg.fire": {
+    "sounds": [
+      {
+        "name": "minecraft:block.beacon.ambient",
+        "type": "event",
+        "volume": 0.6
+      }
+    ]
+  },
+  "weapon.bonesaw.fire": {
+    "sounds": [
+      {
+        "name": "minecraft:entity.player.attack.sweep",
+        "type": "event",
+        "volume": 0.6
+      }
+    ]
+  },
+  "weapon.ubersaw.fire": {
+    "sounds": [
+      {
+        "name": "minecraft:entity.player.attack.sweep",
+        "type": "event",
+        "volume": 0.6
+      }
+    ]
+  },
+  "weapon.sniper_rifle.fire": {
+    "sounds": [
+      {
+        "name": "minecraft:entity.generic.explode",
+        "type": "event",
+        "volume": 0.6
+      }
+    ]
+  },
+  "weapon.huntsman.fire": {
+    "sounds": [
+      {
+        "name": "minecraft:entity.arrow.shoot",
+        "type": "event",
+        "volume": 0.6
+      }
+    ]
+  },
+  "weapon.smg.fire": {
+    "sounds": [
+      {
+        "name": "minecraft:entity.generic.explode",
+        "type": "event",
+        "volume": 0.6
+      }
+    ]
+  },
+  "weapon.jarate.fire": {
+    "sounds": [
+      {
+        "name": "minecraft:entity.splash_potion.throw",
+        "type": "event",
+        "volume": 0.6
+      }
+    ]
+  },
+  "weapon.kukri.fire": {
+    "sounds": [
+      {
+        "name": "minecraft:entity.player.attack.sweep",
+        "type": "event",
+        "volume": 0.6
+      }
+    ]
+  },
+  "weapon.tribalmans_shiv.fire": {
+    "sounds": [
+      {
+        "name": "minecraft:entity.player.attack.sweep",
+        "type": "event",
+        "volume": 0.6
+      }
+    ]
+  },
+  "weapon.revolver.fire": {
+    "sounds": [
+      {
+        "name": "minecraft:entity.generic.explode",
+        "type": "event",
+        "volume": 0.6
+      }
+    ]
+  },
+  "weapon.ambassador.fire": {
+    "sounds": [
+      {
+        "name": "minecraft:entity.generic.explode",
+        "type": "event",
+        "volume": 0.6
+      }
+    ]
+  },
+  "weapon.sapper.fire": {
+    "sounds": [
+      {
+        "name": "minecraft:block.redstone_torch.burnout",
+        "type": "event",
+        "volume": 0.6
+      }
+    ]
+  },
+  "weapon.knife.fire": {
+    "sounds": [
+      {
+        "name": "minecraft:entity.player.attack.sweep",
+        "type": "event",
+        "volume": 0.6
+      }
+    ]
+  },
+  "weapon.big_earner.fire": {
+    "sounds": [
+      {
+        "name": "minecraft:entity.player.attack.sweep",
+        "type": "event",
+        "volume": 0.6
+      }
+    ]
+  },
+  "weapon.construction_pda.fire": {
+    "sounds": [
+      {
+        "name": "minecraft:block.anvil.place",
+        "type": "event",
+        "volume": 0.6
+      }
+    ]
+  },
+  "fx.explode": {
+    "sounds": [
+      {
+        "name": "minecraft:entity.generic.explode",
+        "type": "event",
+        "volume": 0.8
+      }
+    ]
+  },
+  "fx.sticky_detonate": {
+    "sounds": [
+      {
+        "name": "minecraft:entity.generic.explode",
+        "type": "event",
+        "volume": 0.8
+      }
+    ]
+  },
+  "fx.minigun_spin": {
+    "sounds": [
+      {
+        "name": "minecraft:block.beehive.work",
+        "type": "event",
+        "volume": 0.8
+      }
+    ]
+  },
+  "fx.minigun_windup": {
+    "sounds": [
+      {
+        "name": "minecraft:block.piston.extend",
+        "type": "event",
+        "volume": 0.8
+      }
+    ]
+  },
+  "fx.flame_loop": {
+    "sounds": [
+      {
+        "name": "minecraft:block.fire.ambient",
+        "type": "event",
+        "volume": 0.8
+      }
+    ]
+  },
+  "fx.airblast": {
+    "sounds": [
+      {
+        "name": "minecraft:entity.breeze.wind_burst",
+        "type": "event",
+        "volume": 0.8
+      }
+    ]
+  },
+  "fx.medigun_heal": {
+    "sounds": [
+      {
+        "name": "minecraft:block.beacon.ambient",
+        "type": "event",
+        "volume": 0.8
+      }
+    ]
+  },
+  "fx.uber": {
+    "sounds": [
+      {
+        "name": "minecraft:block.beacon.power_select",
+        "type": "event",
+        "volume": 0.8
+      }
+    ]
+  },
+  "fx.crit": {
+    "sounds": [
+      {
+        "name": "minecraft:entity.player.attack.crit",
+        "type": "event",
+        "volume": 0.8
+      }
+    ]
+  },
+  "fx.backstab": {
+    "sounds": [
+      {
+        "name": "minecraft:entity.player.attack.strong",
+        "type": "event",
+        "volume": 0.8
+      }
+    ]
+  },
+  "fx.headshot": {
+    "sounds": [
+      {
+        "name": "minecraft:entity.arrow.hit_player",
+        "type": "event",
+        "volume": 0.8
+      }
+    ]
+  },
+  "fx.cloak": {
+    "sounds": [
+      {
+        "name": "minecraft:entity.illusioner.mirror_move",
+        "type": "event",
+        "volume": 0.8
+      }
+    ]
+  },
+  "fx.uncloak": {
+    "sounds": [
+      {
+        "name": "minecraft:entity.illusioner.mirror_move",
+        "type": "event",
+        "volume": 0.8
+      }
+    ]
+  },
+  "fx.melee_hit": {
+    "sounds": [
+      {
+        "name": "minecraft:entity.player.attack.strong",
+        "type": "event",
+        "volume": 0.8
+      }
+    ]
+  },
+  "fx.melee_world": {
+    "sounds": [
+      {
+        "name": "minecraft:block.stone.hit",
+        "type": "event",
+        "volume": 0.8
+      }
+    ]
+  },
+  "fx.sentry_shoot": {
+    "sounds": [
+      {
+        "name": "minecraft:block.dispenser.launch",
+        "type": "event",
+        "volume": 0.8
+      }
+    ]
+  },
+  "fx.sentry_scan": {
+    "sounds": [
+      {
+        "name": "minecraft:block.note_block.hat",
+        "type": "event",
+        "volume": 0.8
+      }
+    ]
+  },
+  "fx.sentry_spot": {
+    "sounds": [
+      {
+        "name": "minecraft:block.note_block.bell",
+        "type": "event",
+        "volume": 0.8
+      }
+    ]
+  },
+  "fx.build": {
+    "sounds": [
+      {
+        "name": "minecraft:block.anvil.use",
+        "type": "event",
+        "volume": 0.8
+      }
+    ]
+  },
+  "fx.reload": {
+    "sounds": [
+      {
+        "name": "minecraft:item.crossbow.loading_middle",
+        "type": "event",
+        "volume": 0.8
+      }
+    ]
+  },
+  "fx.sniper_charge": {
+    "sounds": [
+      {
+        "name": "minecraft:item.spyglass.use",
+        "type": "event",
+        "volume": 0.8
+      }
+    ]
+  },
+  "fx.jarate_break": {
+    "sounds": [
+      {
+        "name": "minecraft:entity.splash_potion.break",
+        "type": "event",
+        "volume": 0.8
+      }
+    ]
+  },
+  "fx.eat": {
+    "sounds": [
+      {
+        "name": "minecraft:entity.generic.eat",
+        "type": "event",
+        "volume": 0.8
+      }
+    ]
+  },
+  "fx.drink": {
+    "sounds": [
+      {
+        "name": "minecraft:entity.generic.drink",
+        "type": "event",
+        "volume": 0.8
+      }
+    ]
+  }
+}

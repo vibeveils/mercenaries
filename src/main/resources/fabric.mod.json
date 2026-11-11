@@ -1,0 +1,24 @@
+{
+	"schemaVersion": 1,
+	"id": "mercenaries",
+	"version": "${version}",
+	"name": "Mercenaries",
+	"description": "Play as the nine TF2-style mercenary classes in Minecraft: teams, loadouts, weapons, sentries. Ships no Valve assets; generate a personal resource pack from your own TF2 install with tools/extract_tf2_assets.py.",
+	"authors": ["Mercenaries contributors"],
+	"license": "MIT",
+	"icon": "assets/mercenaries/icon.png",
+	"environment": "*",
+	"entrypoints": {
+		"main": ["dev.mercenaries.Mercenaries"],
+		"client": ["dev.mercenaries.client.MercenariesClient"]
+	},
+	"mixins": [
+		{ "config": "mercenaries.client.mixins.json", "environment": "client" }
+	],
+	"depends": {
+		"fabricloader": ">=0.20.1",
+		"minecraft": "~26.3",
+		"java": ">=25",
+		"fabric-api": "*"
+	}
+}

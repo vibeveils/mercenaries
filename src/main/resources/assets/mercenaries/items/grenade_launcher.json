@@ -1,0 +1,6 @@
+{
+  "model": {
+    "type": "minecraft:model",
+    "model": "mercenaries:item/grenade_launcher"
+  }
+}
