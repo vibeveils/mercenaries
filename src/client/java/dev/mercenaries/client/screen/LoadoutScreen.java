@@ -124,7 +124,6 @@ public class LoadoutScreen extends Screen {
 
 	@Override
 	public void extractRenderState(GuiGraphicsExtractor g, int mouseX, int mouseY, float delta) {
-		this.extractBackground(g, mouseX, mouseY, delta);
 		super.extractRenderState(g, mouseX, mouseY, delta);
 		int x0 = left(), y0 = 40;
 		g.centeredText(font, title, width / 2, 12, CommonColors.WHITE);
