@@ -52,14 +52,14 @@ public class ProjectileRenderer extends EntityRenderer<MercProjectile, Projectil
 	public void submit(State s, PoseStack ps, SubmitNodeCollector c, CameraRenderState camera) {
 		super.submit(s, ps, c, camera);
 		ps.pushPose();
-		ps.mulPose(Axis.YP.rotationDegrees(s.yaw));
-		ps.mulPose(Axis.XP.rotationDegrees(-s.pitch));
+		ps.rotate(Axis.YP, (s.yaw) * Mth.DEG_TO_RAD);
+		ps.rotate(Axis.XP, (-s.pitch) * Mth.DEG_TO_RAD);
 		int light = s.lightCoords;
 		MercMesh mesh = MercMeshes.INSTANCE.get("prop/" + key(s.type));
 		if (mesh != null) {
 			// prop meshes are exported in item space: centred at (0.5,0.5,0.5), nose toward -z, longest side 1
 			float size = s.type == MercProjectile.Type.ROCKET || s.type == MercProjectile.Type.ARROW ? 0.6f : 0.3f;
-			ps.mulPose(Axis.YP.rotationDegrees(180f));
+			ps.rotate(Axis.YP, (180f) * Mth.DEG_TO_RAD);
 			ps.scale(size, size, size);
 			ps.translate(-0.5f, -0.5f, -0.5f);
 			mesh.submitAll(ps, c, 0, light, OverlayTexture.NO_OVERLAY, 0xFFFFFFFF);
@@ -75,7 +75,7 @@ public class ProjectileRenderer extends EntityRenderer<MercProjectile, Projectil
 			};
 			float len = s.type == MercProjectile.Type.ROCKET || s.type == MercProjectile.Type.ARROW ? 0.25f : 0.09f;
 			float w = s.type == MercProjectile.Type.SYRINGE || s.type == MercProjectile.Type.ARROW ? 0.03f : 0.08f;
-			c.submitCustomGeometry(ps, RenderTypes.entityCutoutNoCull(FALLBACK_TEX), (pose, vc) -> box(pose, vc, -w, -w, -len, w, w, len, col, light));
+			c.submitCustomGeometry(ps, RenderTypes.armorCutoutNoCull(FALLBACK_TEX), (pose, vc) -> box(pose, vc, -w, -w, -len, w, w, len, col, light));
 		}
 		ps.popPose();
 	}

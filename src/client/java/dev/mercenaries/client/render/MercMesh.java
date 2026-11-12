@@ -36,7 +36,7 @@ public record MercMesh(List<List<Identifier>> skins, List<String> modes, Map<Str
 
 	private RenderType renderType(Identifier tex, int mat) {
 		String mode = mat < modes.size() ? modes.get(mat) : "cutout";
-		return "translucent".equals(mode) ? RenderTypes.entityTranslucent(tex) : RenderTypes.entityCutoutNoCull(tex);
+		return "translucent".equals(mode) ? RenderTypes.entityTranslucent(tex) : RenderTypes.armorCutoutNoCull(tex);
 	}
 
 	/** Submits one part at the current pose. Triangles are emitted as degenerate quads. */

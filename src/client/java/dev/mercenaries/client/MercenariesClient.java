@@ -68,7 +68,7 @@ public final class MercenariesClient implements ClientModInitializer {
 		HudElementRegistry.attachElementAfter(VanillaHudElements.HOTBAR, Mercenaries.id("hud"), MercHud::extract);
 
 		ClientPlayNetworking.registerGlobalReceiver(MercPayloads.OpenPicker.TYPE, (payload, ctx) ->
-				ctx.client().execute(() -> ctx.client().setScreen(new LoadoutScreen(payload.firstTime()))));
+				ctx.client().execute(() -> ctx.client().gui.setScreen(new LoadoutScreen(payload.firstTime()))));
 
 		// Holding a ranged merc weapon: left mouse fires instead of attacking/mining. Switch to another
 		// hotbar slot to mine and build as normal.
@@ -98,14 +98,14 @@ public final class MercenariesClient implements ClientModInitializer {
 		LocalPlayer p = mc.player;
 		if (p == null || mc.getConnection() == null) return;
 
-		while (LOADOUT.consumeClick()) mc.setScreen(new LoadoutScreen(false));
+		while (LOADOUT.consumeClick()) mc.gui.setScreen(new LoadoutScreen(false));
 		while (RELOAD.consumeClick()) ClientPlayNetworking.send(new MercPayloads.Action(MercPayloads.Action.RELOAD));
 		while (ABILITY.consumeClick()) ClientPlayNetworking.send(new MercPayloads.Action(MercPayloads.Action.ABILITY));
 
 		// mouse state for ranged weapons
 		WeaponDef def = rangedHeld(p);
 		int buttons = 0;
-		if (def != null && mc.screen == null) {
+		if (def != null && mc.gui.screen() == null) {
 			if (mc.options.keyAttack.isDown()) buttons |= 1;
 			if (mc.options.keyUse.isDown()) buttons |= 2;
 			if (def.kind() == WeaponDef.Kind.BUILDER && p.isShiftKeyDown() && (buttons & 1) != 0 && (lastButtons & 1) == 0) {

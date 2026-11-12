@@ -12,6 +12,7 @@ import net.minecraft.client.renderer.rendertype.RenderTypes;
 import net.minecraft.client.renderer.state.level.CameraRenderState;
 import net.minecraft.client.renderer.texture.OverlayTexture;
 import net.minecraft.resources.Identifier;
+import net.minecraft.util.Mth;
 
 import dev.mercenaries.entity.BuildingEntity;
 
@@ -59,14 +60,14 @@ public class BuildingRenderer extends EntityRenderer<BuildingEntity, BuildingRen
 		MercMesh mesh = MercMeshes.INSTANCE.get(key);
 		int light = s.lightCoords;
 		ps.pushPose();
-		ps.mulPose(Axis.YP.rotationDegrees(180f - s.yaw));
+		ps.rotate(Axis.YP, (180f - s.yaw) * Mth.DEG_TO_RAD);
 		if (mesh != null) {
 			// building meshes are exported centred on x/z with their base at y = 0, longest side = 1 block
 			ps.scale(1.1f, 1.1f, 1.1f);
 			mesh.submitAll(ps, c, s.skin, light, OverlayTexture.NO_OVERLAY, s.sapped ? 0xFF8899FF : 0xFFFFFFFF);
 		} else {
 			int col = s.sapped ? 0xFF7788FF : s.teamColor;
-			c.submitCustomGeometry(ps, RenderTypes.entityCutoutNoCull(FALLBACK_TEX), (pose, vc) -> {
+			c.submitCustomGeometry(ps, RenderTypes.armorCutoutNoCull(FALLBACK_TEX), (pose, vc) -> {
 				if (s.kind == BuildingEntity.Kind.SENTRY) {
 					box(pose, vc, -0.35f, 0f, -0.35f, 0.35f, 0.15f, 0.35f, col, light);      // base plate
 					box(pose, vc, -0.07f, 0.15f, -0.07f, 0.07f, 0.55f, 0.07f, col, light);   // post

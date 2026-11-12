@@ -1,7 +1,7 @@
 package dev.mercenaries.client.render;
 
 import com.mojang.blaze3d.vertex.PoseStack;
-import org.joml.Quaternionf;
+import com.mojang.math.Axis;
 
 import net.minecraft.client.model.geom.ModelPart;
 import net.minecraft.client.model.geom.PartPose;
@@ -54,7 +54,10 @@ public class MercPlayerLayer extends RenderLayer<AvatarRenderState, PlayerModel>
 		ps.pushPose();
 		// TF2 joint position + whatever offset vanilla's animation applied (e.g. sneaking)
 		ps.translate((p.pivot()[0] + part.x - init.x()) / 16f, (p.pivot()[1] + part.y - init.y()) / 16f, (p.pivot()[2] + part.z - init.z()) / 16f);
-		if (part.xRot != 0 || part.yRot != 0 || part.zRot != 0) ps.mulPose(new Quaternionf().rotationZYX(part.zRot, part.yRot, part.xRot));
+		// same order as ModelPart.translateAndRotate: Z, then Y, then X
+		if (part.zRot != 0) ps.rotate(Axis.ZP, part.zRot);
+		if (part.yRot != 0) ps.rotate(Axis.YP, part.yRot);
+		if (part.xRot != 0) ps.rotate(Axis.XP, part.xRot);
 		ps.scale(part.xScale, part.yScale, part.zScale);
 		mesh.submitPart(p, ps, c, skin, light, overlay, 0xFFFFFFFF);
 		ps.popPose();

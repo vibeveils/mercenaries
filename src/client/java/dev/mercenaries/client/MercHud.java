@@ -20,7 +20,7 @@ public final class MercHud {
 	public static void extract(GuiGraphicsExtractor g, DeltaTracker delta) {
 		Minecraft mc = Minecraft.getInstance();
 		LocalPlayer p = mc.player;
-		if (p == null || mc.options.hideGui) return;
+		if (p == null) return;
 		MercData.Loadout l = MercData.loadout(p);
 		if (!l.active()) return;
 		MercData.Status s = MercData.status(p);
