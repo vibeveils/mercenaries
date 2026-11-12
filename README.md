@@ -106,9 +106,10 @@ This was written without being able to compile or launch it: the build machine c
 | File | Unverified vanilla API |
 |---|---|
 | `MercMesh.java`, `BuildingRenderer.java` | `RenderTypes.entityCutoutNoCull/entityTranslucent`, `VertexConsumer` chain |
-| `MercProjectile.java` | `ThrowableItemProjectile` constructor / `getDefaultGravity` / `shouldBeSaved` |
+| `MercProjectile.java` | `Entity#shouldBeSaved`, `Entity#hurtServer` (projectiles now extend plain `Entity`) |
+| `MercDamage.java` | `ClientboundSetEntityMotionPacket(Entity)`, `registryAccess().lookupOrThrow(...).getOrThrow(...)` |
 | `BuildingEntity.java` | `ValueInput.getIntOr/read`, `ValueOutput.store`, `Mob#removeWhenFarAway` |
-| `MercServer.java` | `CustomModelData` record constructor, scoreboard method names |
+| `MercServer.java` | `CustomModelData` record constructor, `PlayerTeam#setPlayerPrefix` |
 | `MeshItemRenderer.java` | `NoDataSpecialModelRenderer.submit` signature |
 | `PlayerModelMixin.java` | `PlayerModel#setupAnim(AvatarRenderState)`. Marked `require = 0`, so if it misses, the vanilla skin draws under the TF2 mesh instead of crashing |
 

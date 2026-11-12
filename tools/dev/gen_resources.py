@@ -59,12 +59,6 @@ for wid, name, cls, slot, kind in weapons:
     (RES / f"items/{wid}.json").write_text(json.dumps({"model": {"type": "minecraft:model", "model": f"mercenaries:item/{wid}"}}, indent=2))
     sounds[f"weapon.{wid}.fire"] = {"sounds": [{"name": FALLBACK.get(kind, "minecraft:entity.generic.explode"), "type": "event", "volume": 0.6}]}
 
-for proj, col in {"rocket": (120,120,120), "pipe": (70,90,60), "sticky": (60,60,140), "flare": (230,120,40),
-                  "arrow": (150,120,80), "jar": (230,210,60), "syringe": (180,200,230)}.items():
-    lang[f"item.mercenaries.projectile_{proj}"] = proj.capitalize()
-    tile(RES / f"textures/item/projectile_{proj}.png", proj[:2], col, "round")
-    (RES / f"models/item/projectile_{proj}.json").write_text(json.dumps({"parent": "minecraft:item/generated", "textures": {"layer0": f"mercenaries:item/projectile_{proj}"}}, indent=2))
-    (RES / f"items/projectile_{proj}.json").write_text(json.dumps({"model": {"type": "minecraft:model", "model": f"mercenaries:item/projectile_{proj}"}}, indent=2))
 tile(RES / "textures/item/placeholder.png", "ME", (128, 128, 128), "square")
 
 FX = {"explode": "minecraft:entity.generic.explode", "sticky_detonate": "minecraft:entity.generic.explode",

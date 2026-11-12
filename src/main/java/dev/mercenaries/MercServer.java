@@ -159,7 +159,7 @@ public final class MercServer {
 		if (team == null) {
 			team = sb.addPlayerTeam(t.scoreboardName());
 			team.setDisplayName(Component.literal(t.label));
-			team.setColor(t.chat);
+			team.setPlayerPrefix(Component.literal("[" + t.label + "] ").withStyle(t.chat));
 			team.setAllowFriendlyFire(false);
 			team.setSeeFriendlyInvisibles(true);
 		}

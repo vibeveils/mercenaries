@@ -194,7 +194,7 @@ public class BuildingEntity extends Mob {
 			ServerPlayer op = ownerPlayer();
 			LivingEntity attacker = op != null ? op : this;
 			double dmg = 16;
-			boolean died = Combat.rawDamage(sl, target, sl.damageSources().mobAttack(attacker), MercConfig.dmg(dmg));
+			boolean died = Combat.rawDamage(sl, target, dev.mercenaries.combat.MercDamage.bullet(sl, this, attacker), MercConfig.dmg(dmg));
 			if (died) {
 				kills++;
 				if (op != null) Combat.onSentryKill(op);

@@ -137,12 +137,11 @@ public final class Combat {
 	// ------------------------------------------------------------------ applying damage
 
 	/**
-	 * Deals damage ignoring vanilla i-frames (rapid-fire weapons would otherwise miss 9 of 10 hits).
+	 * Deals damage. Merc damage types bypass vanilla i-frames via the minecraft:bypasses_cooldown tag.
 	 * Returns true if the target died.
 	 */
 	public static boolean rawDamage(ServerLevel level, LivingEntity target, DamageSource source, float amount) {
 		if (amount <= 0) return false;
-		target.invulnerableTime = 0;
 		boolean wasAlive = target.isAlive();
 		target.hurtServer(level, source, amount);
 		return wasAlive && !target.isAlive();
@@ -153,9 +152,7 @@ public final class Combat {
 		if (!(attacker.level() instanceof ServerLevel sl) || !canHurt(attacker, target)) return;
 		if (def != null && def.has(Trait.CRIT_BURNING) && target.isOnFire()) crit = true;
 		double mult = critMultiplier(attacker, target, crit);
-		DamageSource src = attacker instanceof Player p
-				? (direct != null && direct != attacker ? sl.damageSources().thrown(direct, attacker) : sl.damageSources().playerAttack(p))
-				: sl.damageSources().mobAttack(attacker);
+		DamageSource src = MercDamage.bullet(sl, direct, attacker);
 		float amount = MercConfig.dmg(tf2Damage * mult);
 		boolean died = rawDamage(sl, target, src, amount);
 		if (mult >= 3.0) {
@@ -181,7 +178,7 @@ public final class Combat {
 								 boolean crit, Entity direct, Entity source) {
 		level.sendParticles(ParticleTypes.EXPLOSION, at.x, at.y, at.z, 1, 0, 0, 0, 0);
 		level.sendParticles(ParticleTypes.LARGE_SMOKE, at.x, at.y, at.z, 6, 0.3, 0.3, 0.3, 0.02);
-		level.playSound(null, at.x, at.y, at.z, MercSounds.fx("explode"), SoundSource.PLAYERS, 1.5f, 0.9f + level.random.nextFloat() * 0.2f);
+		level.playSound(null, at.x, at.y, at.z, MercSounds.fx("explode"), SoundSource.PLAYERS, 1.5f, 0.9f + attacker.getRandom().nextFloat() * 0.2f);
 		if (MercConfig.get().explosionsBreakBlocks) {
 			level.explode(source, at.x, at.y, at.z, Math.min(radius, 3f) * 0.6f, Level.ExplosionInteraction.TNT);
 		}
@@ -202,10 +199,10 @@ public final class Combat {
 				// self damage and the all-important blast jump
 				double selfMul = attacker instanceof Player p ? selfBlastMultiplier(p) : 1.0;
 				float dmg = MercConfig.dmg(tf2Damage * falloff * selfMul * 0.6);
-				if (!ubered(e) && !bonked(e)) rawDamage(level, e, level.damageSources().explosion(source, attacker), dmg);
+				if (!ubered(e) && !bonked(e)) rawDamage(level, e, MercDamage.blast(level, source, attacker), dmg);
 				double strength = 1.15 * falloff * (e.onGround() ? 1.0 : 1.25);
 				e.push(push.x * strength, Math.max(0.35, push.y) * strength + 0.25, push.z * strength);
-				e.hurtMarked = true;
+				MercDamage.syncMotion(e);
 				if (e instanceof Player p) markBlastJump(p);
 				continue;
 			}
@@ -213,10 +210,10 @@ public final class Combat {
 			boolean mini = airborneMini && !e.onGround();
 			double mult = mini && !crit ? 1.35 : critMultiplier(attacker, e, crit);
 			float dmg = MercConfig.dmg(tf2Damage * falloff * mult);
-			rawDamage(level, e, level.damageSources().explosion(source, attacker), dmg);
+			rawDamage(level, e, MercDamage.blast(level, source, attacker), dmg);
 			double kb = 0.6 * falloff * (1.0 - e.getAttributeValue(net.minecraft.world.entity.ai.attributes.Attributes.KNOCKBACK_RESISTANCE));
 			e.push(push.x * kb, push.y * kb + 0.15, push.z * kb);
-			e.hurtMarked = true;
+			MercDamage.syncMotion(e);
 			if (def != null) onHitEffects(attacker, e, def, dmg);
 		}
 	}

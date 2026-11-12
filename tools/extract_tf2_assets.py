@@ -1299,12 +1299,6 @@ def run(args) -> int:
                         mesh = conv.static(p, size=1.0, rotate=rot, center=not building)
                         pack.add_json(f"assets/{MOD_ID}/merc_models/prop/{pid}.json", mesh)
                         manifest["props"].append(pid)
-                        if pid not in ("sentry", "dispenser"):
-                            base = f"{MOD_ID}:item/tf2/{pid}_3d"
-                            pack.add_json(f"assets/{MOD_ID}/models/item/tf2/{pid}_3d.json", handheld_3d_model(None), compact=False)
-                            pack.add_json(f"assets/{MOD_ID}/items/projectile_{pid}.json",
-                                          {"model": {"type": "minecraft:special", "base": base,
-                                                     "model": {"type": f"{MOD_ID}:merc_mesh", "mesh": f"prop/{pid}"}}}, compact=False)
                         print(f"  + {pid}")
                     except Exception as ex:
                         print(f"  ! {pid}: {ex}")

@@ -255,7 +255,7 @@ public final class WeaponHandler {
 					if (consumeAmmo(held, def)) {
 						double dmg = def.damage() + 70 * st.charge;
 						MercProjectile proj = MercProjectile.create(level, p, MercProjectile.Type.ARROW, def, dmg, Combat.kritzed(p));
-						proj.shootFromRotation(p, p.getXRot(), p.getYRot(), 0, 1.8f + 0.8f * st.charge, (1 - st.charge) * 2f);
+						proj.shoot(p, p.getXRot(), p.getYRot(), 1.8f + 0.8f * st.charge, (1 - st.charge) * 2f);
 						level.addFreshEntity(proj);
 						play(p, def);
 					}
@@ -300,7 +300,7 @@ public final class WeaponHandler {
 				if (pressedP && s.cooldown() >= 1f) {
 					MercData.setStatus(p, s.withCooldown(0f));
 					MercProjectile proj = MercProjectile.create(level, p, MercProjectile.Type.JAR, def, 0, false);
-					proj.shootFromRotation(p, p.getXRot(), p.getYRot(), 0, def.projectileSpeed(), 0.5f);
+					proj.shoot(p, p.getXRot(), p.getYRot(), def.projectileSpeed(), 0.5f);
 					level.addFreshEntity(proj);
 				}
 				return 0f;
@@ -315,7 +315,7 @@ public final class WeaponHandler {
 					List<MercProjectile> mine = stickies(p, level);
 					if (mine.size() >= 8) mine.stream().min(Comparator.comparingInt(x -> -x.age())).ifPresent(MercProjectile::discard);
 					MercProjectile proj = MercProjectile.create(level, p, MercProjectile.Type.STICKY, def, def.damage(), Combat.kritzed(p));
-					proj.shootFromRotation(p, p.getXRot(), p.getYRot(), 0, def.projectileSpeed(), 0.5f);
+					proj.shoot(p, p.getXRot(), p.getYRot(), def.projectileSpeed(), 0.5f);
 					level.addFreshEntity(proj);
 					play(p, def);
 					st.nextFire = now + def.fireInterval();
@@ -404,7 +404,7 @@ public final class WeaponHandler {
 		}
 		if (def.id().equals("force_a_nature") && !p.onGround()) {
 			p.push(look.x * -0.6, look.y * -0.6 + 0.1, look.z * -0.6);
-			p.hurtMarked = true;
+			MercDamage.syncMotion(p);
 		}
 		play(p, def);
 	}
@@ -441,7 +441,7 @@ public final class WeaponHandler {
 	private static void launch(ServerPlayer p, ServerLevel level, WeaponDef def, MercProjectile.Type type, float inaccuracy) {
 		MercProjectile proj = MercProjectile.create(level, p, type, def, def.damage(), Combat.kritzed(p));
 		float pitch = type == MercProjectile.Type.PIPE ? p.getXRot() - 4f : p.getXRot();
-		proj.shootFromRotation(p, pitch, p.getYRot(), 0, def.projectileSpeed(), inaccuracy);
+		proj.shoot(p, pitch, p.getYRot(), def.projectileSpeed(), inaccuracy);
 		level.addFreshEntity(proj);
 		play(p, def);
 	}
@@ -480,7 +480,7 @@ public final class WeaponHandler {
 				mp.reflect(p);
 			} else if (e instanceof LivingEntity le && Combat.canHurt(p, le)) {
 				le.push(look.x * 1.3, 0.35 + look.y * 0.5, look.z * 1.3);
-				le.hurtMarked = true;
+				MercDamage.syncMotion(le);
 			} else if (e instanceof LivingEntity le && Combat.sameTeam(p, le)) {
 				le.clearFire();
 			}

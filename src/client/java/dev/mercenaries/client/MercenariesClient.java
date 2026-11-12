@@ -7,7 +7,6 @@ import net.minecraft.ChatFormatting;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.LocalPlayer;
-import net.minecraft.client.renderer.entity.ThrownItemRenderer;
 import net.minecraft.client.renderer.entity.player.AvatarRenderer;
 import net.minecraft.client.renderer.special.SpecialModelRenderers;
 import net.minecraft.network.chat.Component;
@@ -33,6 +32,7 @@ import dev.mercenaries.client.render.BuildingRenderer;
 import dev.mercenaries.client.render.MercMeshes;
 import dev.mercenaries.client.render.MercPlayerLayer;
 import dev.mercenaries.client.render.MeshItemRenderer;
+import dev.mercenaries.client.render.ProjectileRenderer;
 import dev.mercenaries.client.screen.LoadoutScreen;
 import dev.mercenaries.data.MercData;
 import dev.mercenaries.entity.MercEntities;
@@ -59,7 +59,7 @@ public final class MercenariesClient implements ClientModInitializer {
 		ResourceLoader.get(PackType.CLIENT_RESOURCES).registerReloadListener(Mercenaries.id("meshes"), MercMeshes.INSTANCE);
 		SpecialModelRenderers.ID_MAPPER.put(Mercenaries.id("merc_mesh"), MeshItemRenderer.Unbaked.MAP_CODEC);
 
-		EntityRendererRegistry.register(MercEntities.PROJECTILE, ThrownItemRenderer::new);
+		EntityRendererRegistry.register(MercEntities.PROJECTILE, ProjectileRenderer::new);
 		EntityRendererRegistry.register(MercEntities.BUILDING, BuildingRenderer::new);
 		LivingEntityRenderLayerRegistrationCallback.EVENT.register((type, renderer, helper, context) -> {
 			if (renderer instanceof AvatarRenderer avatar) helper.register(new MercPlayerLayer(avatar));

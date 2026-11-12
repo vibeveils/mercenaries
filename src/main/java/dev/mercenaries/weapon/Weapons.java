@@ -182,7 +182,7 @@ public final class Weapons {
 
 	private static ItemAttributeModifiers meleeAttributes(WeaponDef d) {
 		double dmg = MercConfig.dmg(d.damage()) - 1.0;      // player base attack damage is 1
-		double perSecond = 20.0 / Math.max(1, d.interval()); // swings per second
+		double perSecond = 20.0 / Math.max(1, d.fireInterval()); // swings per second
 		return ItemAttributeModifiers.builder()
 				.add(Attributes.ATTACK_DAMAGE, new AttributeModifier(Item.BASE_ATTACK_DAMAGE_ID, dmg, AttributeModifier.Operation.ADD_VALUE), EquipmentSlotGroup.MAINHAND)
 				.add(Attributes.ATTACK_SPEED, new AttributeModifier(Item.BASE_ATTACK_SPEED_ID, perSecond - 4.0, AttributeModifier.Operation.ADD_VALUE), EquipmentSlotGroup.MAINHAND)
