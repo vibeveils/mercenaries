@@ -56,6 +56,9 @@ try:
 except ImportError:  # pragma: no cover
     sys.exit("This script needs numpy and Pillow:  pip install numpy pillow")
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import studiomdl  # noqa: E402  (sibling module)
+
 MOD_ID = "mercenaries"
 PACK_MIN_FORMAT = 84          # Minecraft 26.1+
 PACK_MAX_FORMAT = 9999
@@ -85,6 +88,9 @@ WEAPONS: Dict[str, dict] = {
     "direct_hit":          {"defindex": 127, "names": ["The Direct Hit"]},
     "black_box":           {"defindex": 228, "names": ["The Black Box"]},
     "shotgun":             {"defindex": 10,  "names": ["TF_WEAPON_SHOTGUN_SOLDIER", "TF_WEAPON_SHOTGUN_PRIMARY"]},
+    "heavy_shotgun":       {"defindex": 11,  "names": ["TF_WEAPON_SHOTGUN_HWG", "TF_WEAPON_SHOTGUN_PRIMARY"]},
+    "engineer_shotgun":    {"defindex": 9,   "names": ["TF_WEAPON_SHOTGUN_PRIMARY"]},
+    "engineer_pistol":     {"defindex": 22,  "names": ["TF_WEAPON_PISTOL"]},
     "gunboats":            {"defindex": 133, "names": ["The Gunboats"]},
     "shovel":              {"defindex": 6,   "names": ["TF_WEAPON_SHOVEL"]},
     "equalizer":           {"defindex": 128, "names": ["The Equalizer"]},
@@ -133,6 +139,44 @@ WEAPONS: Dict[str, dict] = {
     "sapper":              {"defindex": 735, "names": ["TF_WEAPON_BUILDER_SPY", "Upgradeable TF_WEAPON_SAPPER"]},
     "knife":               {"defindex": 4,   "names": ["TF_WEAPON_KNIFE"]},
     "big_earner":          {"defindex": 461, "names": ["The Big Earner"]},
+}
+
+# Mod weapon id -> class (used to decide which animation sets each class needs)
+WEAPON_CLASS = {
+    **{w: "scout" for w in ("scattergun", "force_a_nature", "pistol", "bonk", "bat", "sandman")},
+    **{w: "soldier" for w in ("rocket_launcher", "direct_hit", "black_box", "shotgun", "gunboats", "shovel", "equalizer")},
+    **{w: "pyro" for w in ("flamethrower", "backburner", "flare_gun", "fire_axe", "axtinguisher")},
+    **{w: "demoman" for w in ("grenade_launcher", "loch_n_load", "stickybomb_launcher", "scottish_resistance", "bottle", "eyelander")},
+    **{w: "heavy" for w in ("minigun", "natascha", "tomislav", "sandvich", "heavy_shotgun", "fists", "gru")},
+    **{w: "engineer" for w in ("engineer_shotgun", "frontier_justice", "engineer_pistol", "wrench", "gunslinger", "construction_pda")},
+    **{w: "medic" for w in ("syringe_gun", "blutsauger", "medigun", "kritzkrieg", "bonesaw", "ubersaw")},
+    **{w: "sniper" for w in ("sniper_rifle", "huntsman", "smg", "jarate", "kukri", "tribalmans_shiv")},
+    **{w: "spy" for w in ("revolver", "ambassador", "sapper", "knife", "big_earner")},
+}
+MELEE_WEAPONS = {"bat", "sandman", "shovel", "equalizer", "fire_axe", "axtinguisher", "bottle", "eyelander", "fists",
+                 "gru", "wrench", "gunslinger", "bonesaw", "ubersaw", "kukri", "tribalmans_shiv", "knife", "big_earner"}
+WEAPON_SLOT_FALLBACK = {w: "melee" for w in MELEE_WEAPONS}
+WEAPON_SLOT_FALLBACK.update({"construction_pda": "pda", "sapper": "building", "pistol": "secondary", "engineer_pistol": "secondary",
+                             "medigun": "secondary", "kritzkrieg": "secondary", "smg": "secondary", "jarate": "secondary",
+                             "bonk": "secondary", "sandvich": "secondary", "stickybomb_launcher": "secondary",
+                             "scottish_resistance": "secondary", "flare_gun": "secondary", "shotgun": "secondary",
+                             "heavy_shotgun": "secondary", "gunboats": "secondary"})
+
+# Per-weapon sound events -> TF2 SoundData / visuals keys
+WEAPON_SOUND_KEYS = {
+    "fire": ["single_shot", "burst", "melee_miss"],
+    "reload": ["reload"],
+    "hit": ["melee_hit"],
+    "hit_world": ["melee_hit_world"],
+    "deploy": ["deploy"],
+    "empty": ["empty"],
+}
+# Class voice events -> vo/<class>_<prefix>*.mp3
+VOICE_EVENTS = {
+    "pain": ["painsharp", "painsevere"],
+    "death": ["paincriticaldeath"],
+    "medic": ["medic0"],
+    "battlecry": ["battlecry"],
 }
 
 # Non-weapon models used by projectiles and buildings. id -> candidate model paths
@@ -360,6 +404,22 @@ class VFS:
                 return data
         return None
 
+    def list(self, prefix: str) -> List[str]:
+        """All file paths (lower-case) starting with ``prefix`` across VPKs and loose folders."""
+        prefix = prefix.lower().replace("\\", "/")
+        out = set()
+        for s in self.sources:
+            if isinstance(s, Path):
+                base = s / prefix.rsplit("/", 1)[0] if "/" in prefix else s
+                if base.is_dir():
+                    for f in base.iterdir():
+                        rel = f.relative_to(s).as_posix().lower()
+                        if rel.startswith(prefix):
+                            out.add(rel)
+            else:
+                out.update(n for n in s.entries if n.startswith(prefix))
+        return sorted(out)
+
     def exists(self, path: str) -> bool:
         path = path.replace("\\", "/").lstrip("/").lower()
         for s in self.sources:
@@ -565,156 +625,6 @@ def load_vmt(vfs: VFS, path: str, depth: int = 0) -> Optional[Material]:
         return Material(path, base.shader, merged)
     return Material(path, shader, params)
 
-# -------------------------------------------------------------------------- MDL / VVD / VTX
-
-
-@dataclass
-class Bone:
-    name: str
-    parent: int
-    world_pos: np.ndarray  # bind-pose position in model space
-
-
-@dataclass
-class MeshData:
-    material: int                 # skin reference index
-    positions: np.ndarray         # (n,3) source model space
-    normals: np.ndarray           # (n,3)
-    uvs: np.ndarray               # (n,2)
-    bones: np.ndarray             # (n,) dominant bone
-    indices: np.ndarray           # (m,) triangle list into this mesh
-
-
-@dataclass
-class Model:
-    name: str
-    bones: List[Bone]
-    textures: List[str]
-    cd_textures: List[str]
-    skins: List[List[int]]
-    meshes: List[MeshData] = field(default_factory=list)
-
-
-def _cstr(buf: bytes, off: int) -> str:
-    end = buf.index(b"\0", off)
-    return buf[off:end].decode("utf-8", errors="replace")
-
-
-def read_vvd(data: bytes) -> np.ndarray:
-    """Returns structured array of LOD0 vertices after fixups."""
-    ident, ver, chk, nlods = struct.unpack_from("<4sIii", data, 0)
-    if ident != b"IDSV":
-        raise ValueError("bad VVD")
-    lod_verts = struct.unpack_from("<8i", data, 16)
-    nfix, fix_start, vert_start, _tan_start = struct.unpack_from("<iiii", data, 48)
-    dt = np.dtype([("w", "<f4", 3), ("b", "u1", 3), ("nb", "u1"), ("pos", "<f4", 3),
-                   ("nrm", "<f4", 3), ("uv", "<f4", 2)])
-    total = lod_verts[0]
-    if nfix == 0:
-        return np.frombuffer(data, dt, total, vert_start)
-    allv = np.frombuffer(data, dt, (len(data) - vert_start) // 48, vert_start)
-    chunks = []
-    for i in range(nfix):
-        lod, src, cnt = struct.unpack_from("<iii", data, fix_start + 12 * i)
-        if lod >= 0:
-            chunks.append(allv[src:src + cnt])
-    return np.concatenate(chunks)
-
-
-def read_mdl(vfs: VFS, path: str) -> Model:
-    mdl = vfs.read(path)
-    if mdl is None:
-        raise FileNotFoundError(path)
-    base = path[:-4]
-    vvd = vfs.read(base + ".vvd")
-    vtx = vfs.read(base + ".dx90.vtx") or vfs.read(base + ".dx80.vtx") or vfs.read(base + ".sw.vtx")
-    if vvd is None or vtx is None:
-        raise FileNotFoundError(f"{path}: missing .vvd/.vtx")
-    ident, version = struct.unpack_from("<4si", mdl, 0)
-    if ident != b"IDST":
-        raise ValueError(f"{path}: bad MDL")
-    name = mdl[12:76].split(b"\0")[0].decode(errors="replace")
-    (numbones, boneindex) = struct.unpack_from("<ii", mdl, 156)
-    numtex, texidx, numcd, cdidx, nskinref, nfam, skinidx, nbp, bpidx = struct.unpack_from("<9i", mdl, 204)
-
-    bones = []
-    for i in range(numbones):
-        o = boneindex + i * 216
-        nameoff, parent = struct.unpack_from("<ii", mdl, o)
-        m = np.array(struct.unpack_from("<12f", mdl, o + 96), np.float64).reshape(3, 4)
-        R, t = m[:, :3], m[:, 3]
-        world = -R.T @ t  # inverse of poseToBone translation
-        bones.append(Bone(_cstr(mdl, o + nameoff), parent, world))
-
-    textures = []
-    for i in range(numtex):
-        o = texidx + i * 64
-        textures.append(_cstr(mdl, o + struct.unpack_from("<i", mdl, o)[0]))
-    cds = []
-    for i in range(numcd):
-        cds.append(_cstr(mdl, struct.unpack_from("<i", mdl, cdidx + 4 * i)[0]))
-    skins = []
-    for f in range(max(1, nfam)):
-        skins.append(list(struct.unpack_from(f"<{nskinref}h", mdl, skinidx + f * nskinref * 2)) if nskinref else [])
-
-    verts = read_vvd(vvd)
-    model = Model(name, bones, textures, cds, skins)
-
-    # VTX header (pack(1)): version i, vcache i, maxbps H, maxbpt H, maxbpv i, checksum i, nlods i, mrl i, nbp i, bpoff i
-    v_nbp, v_bpoff = struct.unpack_from("<ii", vtx, 28)
-    for bp in range(nbp):
-        bo = bpidx + bp * 16
-        _bpname, nmodels, _base, modelindex = struct.unpack_from("<iiii", mdl, bo)
-        vbo = v_bpoff + bp * 8
-        vnm, vmo = struct.unpack_from("<ii", vtx, vbo)
-        if nmodels == 0:
-            continue
-        mi = 0  # default bodygroup
-        mo = bo + modelindex + mi * 148
-        nmeshes, meshindex, nverts, vertexindex = struct.unpack_from("<iiii", mdl, mo + 72)
-        if nmeshes == 0 or nverts == 0:
-            continue
-        model_vstart = vertexindex // 48
-        vmodel = vbo + vmo + mi * 8
-        _nlods, lodoff = struct.unpack_from("<ii", vtx, vmodel)
-        vlod = vmodel + lodoff  # LOD 0
-        vnmesh, vmeshoff = struct.unpack_from("<ii", vtx, vlod)
-        for me in range(nmeshes):
-            mso = mo + meshindex + me * 116
-            material, _modelidx, m_nverts, m_voff = struct.unpack_from("<iiii", mdl, mso)
-            vmesh = vlod + vmeshoff + me * 9
-            nsg, sgoff = struct.unpack_from("<ii", vtx, vmesh)
-            out_idx: List[int] = []
-            for sg in range(nsg):
-                vsg = vmesh + sgoff + sg * 25
-                sg_nv, sg_vo, sg_ni, sg_io, sg_ns, sg_so = struct.unpack_from("<iiiiii", vtx, vsg)
-                sverts = np.frombuffer(vtx, np.dtype([("bw", "u1", 3), ("nb", "u1"), ("orig", "<u2"), ("bid", "i1", 3)]), sg_nv, vsg + sg_vo)
-                sidx = np.frombuffer(vtx, "<u2", sg_ni, vsg + sg_io)
-                orig = sverts["orig"].astype(np.int64)
-                for st in range(sg_ns):
-                    so = vsg + sg_so + st * 27
-                    st_ni, st_io, st_nv, st_vo = struct.unpack_from("<iiii", vtx, so)
-                    st_flags = vtx[so + 18]
-                    seg = sidx[st_io:st_io + st_ni]
-                    if st_flags & 2:  # tristrip
-                        tris = []
-                        for k in range(len(seg) - 2):
-                            a, b, c = seg[k], seg[k + 1], seg[k + 2]
-                            if a == b or b == c or a == c:
-                                continue
-                            tris += [a, c, b] if k % 2 else [a, b, c]
-                        seg = np.array(tris, np.int64)
-                    out_idx.extend(orig[np.asarray(seg, np.int64)].tolist())
-            if not out_idx:
-                continue
-            gstart = model_vstart + m_voff
-            mv = verts[gstart:gstart + m_nverts]
-            w = mv["w"]
-            dom = mv["b"][np.arange(len(mv)), np.argmax(w, axis=1)].astype(np.int32)
-            model.meshes.append(MeshData(material, mv["pos"].astype(np.float64), mv["nrm"].astype(np.float64),
-                                         mv["uv"].astype(np.float64), dom, np.array(out_idx, np.int32)))
-    return model
-
 # -------------------------------------------------------------------------- texture export
 
 
@@ -754,98 +664,87 @@ def sanitize(p: str) -> str:
     return re.sub(r"[^a-z0-9_./-]", "_", p)
 
 
-def resolve_material(vfs: VFS, model: Model, tex_index: int) -> Optional[Material]:
+def resolve_material(vfs: VFS, model, tex_index: int) -> Optional[Material]:
     name = model.textures[tex_index].replace("\\", "/")
-    dirs = model.cd_textures or [""]
-    for d in dirs:
+    for d in (model.cd_textures or [""]):
         d = d.replace("\\", "/").strip("/")
-        p = f"materials/{d}/{name}.vmt" if d else f"materials/{name}.vmt"
-        mat = load_vmt(vfs, p)
+        mat = load_vmt(vfs, f"materials/{d}/{name}.vmt" if d else f"materials/{name}.vmt")
         if mat:
             return mat
     return None
 
 # -------------------------------------------------------------------------- mesh conversion
 
-PART_ORDER = ["head", "body", "right_arm", "left_arm", "right_leg", "left_leg"]
+# Player animation states and the TF2 sequence names tried for each ({s} = anim slot)
+ANIM_STATES = {
+    "stand": ["stand_{s}"],
+    "run": ["run_{s}"],
+    "crouch": ["crouch_{s}"],
+    "crouch_walk": ["crouch_walk_{s}", "crouchwalk_{s}"],
+    "air": ["airwalk_{s}", "a_jumpfloat_{s}", "jump_float_{s}"],
+    "jump": ["jump_start_{s}", "a_jumpstart_{s}"],
+    "swim": ["swim_{s}"],
+}
+BLEND_TARGETS = {"move_x": 1.0, "move_y": 0.0, "body_pitch": 0.0, "body_yaw": 0.0, "move_scale": 1.0}
+MAX_FRAMES = 60
 
 
-def bone_part(name: str) -> str:
-    n = name.lower()
-    side = "right" if re.search(r"(_r$|_r_|_r\d|right)", n) else ("left" if re.search(r"(_l$|_l_|_l\d|left)", n) else None)
-    if any(k in n for k in ("head", "neck", "jaw", "eye", "brow", "lip", "tongue", "cheek", "hat")):
-        return "head"
-    if side and any(k in n for k in ("upperarm", "lowerarm", "forearm", "hand", "finger", "thumb", "index", "middle", "ring", "pinky", "wrist", "elbow")):
-        return f"{side}_arm"
-    if side and any(k in n for k in ("hip", "thigh", "knee", "calf", "foot", "toe", "upperleg", "lowerleg", "ankle")):
-        return f"{side}_leg"
-    return "body"
+def _r(a, nd: int = 4) -> list:
+    return np.round(np.asarray(a, np.float64), nd).reshape(-1).tolist()
 
 
-def find_bone(bones: List[Bone], *keys: str) -> Optional[Bone]:
-    for k in keys:
-        for b in bones:
-            if b.name.lower() == k.lower():
-                return b
-    for k in keys:
-        for b in bones:
-            if k.lower() in b.name.lower():
-                return b
-    return None
+def skeleton_basis(bones) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Character left / up / forward axes in model space, measured from the skeleton itself.
+
+    TF2 models are not all authored facing the same axis, so instead of assuming one we read it
+    off the bones: left = right hip -> left hip (or shoulders), up = feet -> head.
+    """
+    def wp(*names):
+        for n in names:
+            for b in bones:
+                if b.name.lower() == n.lower():
+                    return b.world_pos
+        return None
+    hl, hr = wp("bip_hip_L", "bip_thigh_L"), wp("bip_hip_R", "bip_thigh_R")
+    sl, sr = wp("bip_upperArm_L", "bip_collar_L"), wp("bip_upperArm_R", "bip_collar_R")
+    head = wp("bip_head", "bip_neck")
+    fl, fr = wp("bip_foot_L"), wp("bip_foot_R")
+    left = None
+    if hl is not None and hr is not None:
+        left = hl - hr
+    if sl is not None and sr is not None:
+        left = (sl - sr) if left is None else left + (sl - sr)
+    if left is None or np.linalg.norm(left) < 1e-6:
+        left = np.array([0.0, 1.0, 0.0])
+    feet = (fl + fr) / 2 if fl is not None and fr is not None else np.zeros(3)
+    up = (head - feet) if head is not None else np.array([0.0, 0.0, 1.0])
+    up = up / (np.linalg.norm(up) + 1e-12)
+    left = left - up * np.dot(left, up)
+    left = left / (np.linalg.norm(left) + 1e-12)
+    fwd = np.cross(left, up)
+    return left, up, fwd
 
 
-def rot_between(a: np.ndarray, b: np.ndarray) -> np.ndarray:
-    a = a / (np.linalg.norm(a) + 1e-12)
-    b = b / (np.linalg.norm(b) + 1e-12)
-    v = np.cross(a, b)
-    c = float(np.dot(a, b))
-    if c < -0.9999:
-        axis = np.cross(a, [1, 0, 0])
-        if np.linalg.norm(axis) < 1e-6:
-            axis = np.cross(a, [0, 1, 0])
-        axis /= np.linalg.norm(axis)
-        return 2 * np.outer(axis, axis) - np.eye(3)
-    vx = np.array([[0, -v[2], v[1]], [v[2], 0, -v[0]], [-v[1], v[0], 0]])
-    return np.eye(3) + vx + vx @ vx * (1.0 / (1.0 + c))
-
-
-def src_to_entity(p: np.ndarray, scale: float) -> np.ndarray:
-    """Source (x fwd, y left, z up) -> Minecraft entity-model space (x left, y down, z back), feet at y=1.5."""
-    out = np.empty_like(p)
-    out[..., 0] = p[..., 1] * scale
-    out[..., 1] = 1.5 - p[..., 2] * scale
-    out[..., 2] = -p[..., 0] * scale
-    return out
-
-
-def src_dir_to_entity(n: np.ndarray) -> np.ndarray:
-    out = np.empty_like(n)
-    out[..., 0], out[..., 1], out[..., 2] = n[..., 1], -n[..., 2], -n[..., 0]
-    return out
-
-
-def src_to_item(p: np.ndarray) -> np.ndarray:
-    """Source -> item space: barrel (+x) points to -z, up is +y."""
-    out = np.empty_like(p)
-    out[..., 0], out[..., 1], out[..., 2] = -p[..., 1], p[..., 2], -p[..., 0]
-    return out
-
-
-def _r(a: np.ndarray, nd: int = 4) -> list:
-    return np.round(a.astype(np.float64), nd).reshape(-1).tolist()
+def to_entity_matrix(left, up, fwd, scale: float, floor: float) -> np.ndarray:
+    """4x4 from Source model space to Minecraft entity-model space (x = left, y = down, z = back, feet at y = 1.5)."""
+    m = np.eye(4)
+    m[0, :3] = left * scale
+    m[1, :3] = -up * scale
+    m[2, :3] = -fwd * scale
+    m[1, 3] = 1.5 + floor * scale
+    return m
 
 
 class ModelConverter:
     def __init__(self, vfs: VFS, tex: TextureCache, max_tex: int):
         self.vfs, self.tex = vfs, tex
+        self.read = vfs.read
 
-    def _skins(self, model: Model) -> Tuple[List[List[Optional[str]]], List[str], Dict[int, Material]]:
-        """Returns per-family texture ids per skin-ref slot, render mode per slot, and material per texture index."""
+    def _skins(self, model):
         mats: Dict[int, Optional[Material]] = {}
-        fams: List[List[Optional[str]]] = []
-        modes: List[str] = []
-        nref = len(model.skins[0]) if model.skins else len(model.textures)
-        for fam in (model.skins or [list(range(len(model.textures)))]):
+        fams, modes = [], []
+        nref = len(model.skins[0]) if model.skins and model.skins[0] else len(model.textures)
+        for fam in (model.skins if model.skins and model.skins[0] else [list(range(len(model.textures)))]):
             row = []
             for slot in range(nref):
                 ti = fam[slot] if slot < len(fam) else slot
@@ -855,14 +754,15 @@ class ModelConverter:
                 tid = None
                 if m is not None:
                     shader = m.shader.lower()
-                    src = m.params.get("$iris") if shader in ("eyes", "eyerefract") else m.basetexture
+                    eye = shader in ("eyes", "eyerefract")
+                    src = m.params.get("$iris") if eye else m.basetexture
                     if src:
-                        tid = self.tex.export(src, opaque=not (m.translucent or m.alphatest or shader in ("eyes", "eyerefract")))
+                        tid = self.tex.export(src, opaque=not (m.translucent or m.alphatest or eye))
                 row.append(tid)
             fams.append(row)
+        first = model.skins[0] if model.skins and model.skins[0] else list(range(nref))
         for slot in range(nref):
-            ti = model.skins[0][slot] if model.skins and slot < len(model.skins[0]) else slot
-            m = mats.get(ti)
+            m = mats.get(first[slot] if slot < len(first) else slot)
             mode = "cutout"
             if m is not None:
                 if m.shader.lower() in ("eyes", "eyerefract"):
@@ -870,115 +770,171 @@ class ModelConverter:
                 elif m.translucent:
                     mode = "translucent"
             modes.append(mode)
-        return fams, modes, {k: v for k, v in mats.items() if v}
+        return fams, modes
 
     @staticmethod
-    def _eye_uv(pos_e: np.ndarray) -> np.ndarray:
-        """Planar projection for eyeball meshes (entity space, looking along -z)."""
-        c = pos_e.mean(0)
-        ext = max(1e-6, float(np.max(np.abs(pos_e[:, :2] - c[:2]))) * 2.0)
-        uv = np.empty((len(pos_e), 2))
-        uv[:, 0] = 0.5 + (pos_e[:, 0] - c[0]) / ext
-        uv[:, 1] = 0.5 + (pos_e[:, 1] - c[1]) / ext
-        return np.clip(uv, 0, 1)
+    def _eye_uv(pos: np.ndarray, fwd: np.ndarray, left: np.ndarray, up: np.ndarray) -> np.ndarray:
+        c = pos.mean(0)
+        u = (pos - c) @ left
+        v = (pos - c) @ up
+        ext = max(1e-6, float(max(np.abs(u).max(), np.abs(v).max())) * 2)
+        return np.clip(np.stack([0.5 - u / ext, 0.5 - v / ext], 1), 0, 1)
 
-    def player(self, path: str, scale: float) -> dict:
-        model = read_mdl(self.vfs, path)
-        fams, modes, _ = self._skins(model)
-        bones = model.bones
-        part_of_bone = [bone_part(b.name) for b in bones]
+    def _mesh_json(self, mesh, modes, basis=None, with_weights=True) -> dict:
+        uv = mesh.uvs
+        if basis is not None and mesh.material < len(modes) and modes[mesh.material] == "eye":
+            left, up, fwd = basis
+            uv = self._eye_uv(mesh.positions, fwd, left, up)
+        out = {"mat": int(mesh.material), "v": _r(mesh.positions), "n": _r(mesh.normals, 3), "uv": _r(uv, 5),
+               "i": mesh.indices.astype(np.int32).tolist()}
+        if with_weights:
+            out["bi"] = mesh.bones.astype(np.int32).reshape(-1).tolist()
+            out["bw"] = _r(mesh.weights, 3)
+        return out
 
-        pivots_src = {
-            "head": find_bone(bones, "bip_neck", "neck", "bip_head"),
-            "body": find_bone(bones, "bip_neck", "bip_spine_3", "spine"),
-            "right_arm": find_bone(bones, "bip_upperArm_R", "upperarm_r"),
-            "left_arm": find_bone(bones, "bip_upperArm_L", "upperarm_l"),
-            "right_leg": find_bone(bones, "bip_hip_R", "thigh_r"),
-            "left_leg": find_bone(bones, "bip_hip_L", "thigh_l"),
-        }
-        ends = {
-            "right_arm": find_bone(bones, "bip_hand_R", "hand_r"),
-            "left_arm": find_bone(bones, "bip_hand_L", "hand_l"),
-            "right_leg": find_bone(bones, "bip_foot_R", "foot_r"),
-            "left_leg": find_bone(bones, "bip_foot_L", "foot_l"),
-        }
-        pivots = {}
-        straighten = {}
-        for part, b in pivots_src.items():
-            pv = src_to_entity(b.world_pos[None], scale)[0] if b else np.array([0.0, 0.0, 0.0])
-            pivots[part] = pv
-            e = ends.get(part)
-            if b is not None and e is not None:
-                d = src_to_entity(e.world_pos[None], scale)[0] - pv
-                # hang straight down (+y in entity model space); legs keep slight natural offset
-                straighten[part] = rot_between(d, np.array([0.0, 1.0, 0.0]))
+    @staticmethod
+    def _bones_json(bones) -> list:
+        return [{"name": b.name, "parent": int(b.parent), "p2b": _r(b.p2b, 6)} for b in bones]
 
-        parts: Dict[str, List[dict]] = {p: [] for p in PART_ORDER}
-        for mesh in model.meshes:
-            pos_e = src_to_entity(mesh.positions, scale)
-            nrm_e = src_dir_to_entity(mesh.normals)
-            mp = np.array([part_of_bone[b] if 0 <= b < len(bones) else "body" for b in mesh.bones])
-            mode = modes[mesh.material] if mesh.material < len(modes) else "cutout"
-            uv = self._eye_uv(pos_e) if mode == "eye" else mesh.uvs
-            tri = mesh.indices.reshape(-1, 3)
-            tri_parts = mp[tri]
-            # each triangle goes to the part owning >= 2 of its vertices, else its first vertex's part
-            label = tri_parts[:, 0].copy()
-            maj = tri_parts[:, 1] == tri_parts[:, 2]
-            label[maj] = tri_parts[maj, 1]
-            for part in PART_ORDER:
-                sel = np.where(label == part)[0]
-                if len(sel) == 0:
+    # ------------------------------------------------------------------ players
+
+    def player(self, path: str, scale: float, slots: List[str], report: List[str]) -> dict:
+        files = studiomdl.load_with_includes(self.read, path)
+        main = files[0]
+        fams, modes = self._skins(main)
+        left, up, fwd = skeleton_basis(main.bones)
+        allp = np.concatenate([m.positions for m in main.meshes])
+        floor = -float((allp @ up).min())
+        to_entity = to_entity_matrix(left, up, fwd, scale, floor)
+
+        seq_index: Dict[str, Tuple[object, object]] = {}
+        for f in files:
+            for sq in f.seqs:
+                seq_index.setdefault(sq.label.lower(), (f, sq))
+        report.append(f"{path}: {len(main.bones)} bones, {sum(len(m.indices) for m in main.meshes) // 3} tris, "
+                      f"{len(seq_index)} sequences from {len(files)} file(s): " + ", ".join(sorted(seq_index)))
+
+        clips = {}
+        main_names = [b.name.lower() for b in main.bones]
+        default_pos = np.array([b.pos for b in main.bones])
+        default_quat = np.array([b.quat for b in main.bones])
+        for slot in slots:
+            for state, patterns in ANIM_STATES.items():
+                key = f"{state}_{slot.lower()}"
+                hit = None
+                for pat in patterns:
+                    hit = seq_index.get(pat.format(s=slot).lower())
+                    if hit:
+                        break
+                if hit is None:
                     continue
-                t = tri[sel]
-                used, inv = np.unique(t.reshape(-1), return_inverse=True)
-                pv = pivots[part]
-                lp = pos_e[used] - pv
-                ln = nrm_e[used]
-                if part in straighten:
-                    R = straighten[part]
-                    lp = lp @ R.T
-                    ln = ln @ R.T
-                parts[part].append({
-                    "mat": int(mesh.material),
-                    "v": _r(lp), "n": _r(ln, 3), "uv": _r(uv[used], 5),
-                    "i": inv.astype(np.int32).tolist(),
-                })
-        return {
-            "format": 1, "kind": "player", "source": path,
-            "skins": fams, "modes": modes,
-            "parts": {p: {"pivot": _r(pivots[p] * 16.0, 3), "meshes": parts[p]} for p in PART_ORDER if parts[p]},
-        }
+                f, sq = hit
+                ai = studiomdl.pick_blend(f, sq, BLEND_TARGETS)
+                if not (0 <= ai < len(f.anims)):
+                    continue
+                a = f.anims[ai]
+                if a.flags & studiomdl.STUDIO_DELTA or a.numframes <= 0:
+                    continue
+                remap = [main_names.index(b.name.lower()) if b.name.lower() in main_names else -1 for b in f.bones]
+                n = min(a.numframes, MAX_FRAMES)
+                step = a.numframes / n
+                frames = []
+                for k in range(n):
+                    pos, quat = studiomdl.decode_frame(f, a, min(a.numframes - 1, int(round(k * step))))
+                    fp, fq = default_pos.copy(), default_quat.copy()
+                    for fi, mi in enumerate(remap):
+                        if mi >= 0:
+                            fp[mi], fq[mi] = pos[fi], quat[fi]
+                    frames.append(np.concatenate([fp, fq], 1))  # (bones, 7)
+                arr = np.stack(frames)  # (frames, bones, 7)
+                varies = np.where(np.abs(arr - arr[0]).max(axis=(0, 2)) > 1e-4)[0]
+                const = {int(i): _r(arr[0, i], 4) for i in range(arr.shape[1]) if i not in set(varies.tolist())}
+                clips[key] = {
+                    "fps": round(a.fps / step, 3), "frames": n, "loop": bool(sq.looping or state in ("stand", "run", "crouch", "crouch_walk", "air", "swim")),
+                    "const": const, "anim": varies.astype(int).tolist(), "data": _r(arr[:, varies, :], 4),
+                }
+        report.append(f"  exported clips: {', '.join(sorted(clips)) or 'NONE'}")
 
-    def static(self, path: str, size: float = 1.0, rotate: Tuple[float, float, float] = (0, 0, 0), center: bool = True) -> dict:
-        model = read_mdl(self.vfs, path)
-        fams, modes, _ = self._skins(model)
-        allp = np.concatenate([m.positions for m in model.meshes]) if model.meshes else np.zeros((1, 3))
-        pts = src_to_item(allp)
-        R = euler(rotate)
-        pts = pts @ R.T
+        meshes = [self._mesh_json(m, modes, (left, up, fwd)) for m in main.meshes]
+        head = main.bone_index("bip_head")
+        spine = main.bone_index("bip_spine_3")
+        return {"format": 2, "kind": "skinned", "source": path, "skins": fams, "modes": modes,
+                "to_entity": _r(to_entity, 6), "bones": self._bones_json(main.bones),
+                "head_bone": head, "spine_bone": spine, "meshes": meshes, "clips": clips}
+
+    # ------------------------------------------------------------------ weapons
+
+    def weapon(self, path: str, melee: bool, rotate=(0, 0, 0), size: float = 1.0) -> dict:
+        m = studiomdl.load(self.read, path, True)
+        fams, modes = self._skins(m)
+        # vertices in the frame of the bone the hand holds (weapon_bone), so every weapon shares one convention
+        wb = m.bone_index("weapon_bone")
+        frame = m.bones[wb].p2b if wb >= 0 else np.eye(4)[:3]
+        R, t = frame[:, :3], frame[:, 3]
+        allp = np.concatenate([x.positions for x in m.meshes]) if m.meshes else np.zeros((1, 3))
+        local = allp @ R.T + t
+        # Heuristic axes: longest extent = barrel/blade (pointing away from the grip at the origin),
+        # second-longest = up (the side with more geometry above the hand).
+        ext = local.max(0) - local.min(0)
+        order = list(np.argsort(-ext))
+        a_len, a_up = order[0], order[1]
+        sign_len = 1.0 if local[:, a_len].max() >= -local[:, a_len].min() else -1.0
+        sign_up = 1.0 if local[:, a_up].max() >= -local[:, a_up].min() else -1.0
+        L = np.zeros(3); L[a_len] = sign_len
+        U = np.zeros(3); U[a_up] = sign_up
+        side = np.cross(U, L) if not melee else np.cross(L, U)
+        if melee:   # blade points up
+            basis = np.stack([side, L, -U])
+        else:       # barrel points forward (-z), up is +y
+            basis = np.stack([side, U, -L])
+        basis = euler(rotate) @ basis
+        pts = local @ basis.T
         lo, hi = pts.min(0), pts.max(0)
-        ext = float(max(hi - lo)) or 1.0
-        s = size / ext
+        s = size / (float(max(hi - lo)) or 1.0)
+        grip = np.array([0.5, 0.35, 0.55]) if not melee else np.array([0.5, 0.15, 0.5])
+        item_meshes = []
+        for x in m.meshes:
+            p = ((x.positions @ R.T + t) @ basis.T) * s + grip
+            n = (x.normals @ R.T) @ basis.T
+            item_meshes.append({"mat": int(x.material), "v": _r(p), "n": _r(n, 3), "uv": _r(x.uvs, 5),
+                                "i": x.indices.astype(np.int32).tolist()})
+        attach = {"bones": self._bones_json(m.bones), "meshes": [self._mesh_json(x, modes) for x in m.meshes]}
+        return {"format": 2, "kind": "weapon", "source": path, "skins": fams, "modes": modes,
+                "parts": {"root": {"pivot": [0, 0, 0], "meshes": item_meshes}}, "attach": attach}
+
+    def static(self, path: str, size: float = 1.0, rotate=(0, 0, 0), center: bool = True) -> dict:
+        m = studiomdl.load(self.read, path, True)
+        fams, modes = self._skins(m)
+        allp = np.concatenate([x.positions for x in m.meshes]) if m.meshes else np.zeros((1, 3))
+        R = euler(rotate)
+        conv = lambda p: (np.stack([-p[..., 1], p[..., 2], -p[..., 0]], -1)) @ R.T
+        pts = conv(allp)
+        lo, hi = pts.min(0), pts.max(0)
+        s = size / (float(max(hi - lo)) or 1.0)
         mid = (lo + hi) / 2
+        anchor = mid if center else np.array([mid[0], lo[1], mid[2]])
         meshes = []
-        for mesh in model.meshes:
-            p = src_to_item(mesh.positions) @ R.T
-            anchor = mid if center else np.array([mid[0], lo[1], mid[2]])
-            p = (p - anchor) * s + (np.array([0.5, 0.5, 0.5]) if center else 0)
-            n = src_to_item(mesh.normals) @ R.T
-            meshes.append({"mat": int(mesh.material), "v": _r(p), "n": _r(n, 3), "uv": _r(mesh.uvs, 5),
-                           "i": mesh.indices.astype(np.int32).tolist()})
-        return {"format": 1, "kind": "static", "source": path, "skins": fams, "modes": modes,
-                "native_size": round(ext, 3), "parts": {"root": {"pivot": [0, 0, 0], "meshes": meshes}}}
+        for x in m.meshes:
+            p = (conv(x.positions) - anchor) * s + (np.array([0.5, 0.5, 0.5]) if center else 0)
+            meshes.append({"mat": int(x.material), "v": _r(p), "n": _r(conv(x.normals), 3), "uv": _r(x.uvs, 5),
+                           "i": x.indices.astype(np.int32).tolist()})
+        return {"format": 2, "kind": "static", "source": path, "skins": fams, "modes": modes,
+                "parts": {"root": {"pivot": [0, 0, 0], "meshes": meshes}}}
+
+    def sequences(self, path: str) -> List[str]:
+        try:
+            return sorted({sq.label for f in studiomdl.load_with_includes(self.read, path) for sq in f.seqs})
+        except Exception as ex:
+            return [f"<error: {ex}>"]
 
 
-def euler(deg: Tuple[float, float, float]) -> np.ndarray:
+def euler(deg) -> np.ndarray:
     x, y, z = (math.radians(a) for a in deg)
     Rx = np.array([[1, 0, 0], [0, math.cos(x), -math.sin(x)], [0, math.sin(x), math.cos(x)]])
     Ry = np.array([[math.cos(y), 0, math.sin(y)], [0, 1, 0], [-math.sin(y), 0, math.cos(y)]])
     Rz = np.array([[math.cos(z), -math.sin(z), 0], [math.sin(z), math.cos(z), 0], [0, 0, 1]])
     return Rz @ Ry @ Rx
+
 
 # -------------------------------------------------------------------------- items_game
 
@@ -1038,9 +994,11 @@ class ItemSchema:
 
 
 class SoundBank:
+    """Resolves TF2 soundscript names / raw paths to files and converts them to mono OGG."""
+
     def __init__(self, vfs: VFS, pack: "PackWriter"):
         self.vfs, self.pack = vfs, pack
-        self.scripts: Dict[str, str] = {}
+        self.scripts: Dict[str, List[str]] = {}
         self.encoder = self._find_encoder()
         self.events: Dict[str, dict] = {}
         man = vfs.read("scripts/game_sounds_manifest.txt")
@@ -1056,13 +1014,10 @@ class SoundBank:
             for name, body in parse_kv(decode_text(d)):
                 if not isinstance(body, KV):
                     continue
-                wave = body.str("wave")
-                if not wave:
-                    rw = body.node("rndwave")
-                    waves = [v for _k, v in rw if isinstance(v, str)]
-                    wave = waves[0] if waves else ""
-                if wave:
-                    self.scripts[name.lower()] = re.sub(r"^[\^)(\]<>*#@!?$&}{~]+", "", wave.replace("\\", "/"))
+                waves = [body.str("wave")] if body.str("wave") else [v for _k, v in body.node("rndwave") if isinstance(v, str)]
+                waves = [re.sub(r"^[\^)(\]<>*#@!?$&}{~]+", "", w.replace("\\", "/")) for w in waves if w]
+                if waves:
+                    self.scripts[name.lower()] = waves
 
     @staticmethod
     def _find_encoder() -> Optional[str]:
@@ -1074,33 +1029,38 @@ class SoundBank:
         except ImportError:
             return None
 
-    def wav_for(self, candidates: List[str]) -> Optional[str]:
+    def files_for(self, candidates: List[str], limit: int = 1) -> List[str]:
+        """First candidate that resolves, expanded to up to ``limit`` random-wave variants."""
         for c in candidates:
             if not c:
                 continue
             if c.lower().endswith((".wav", ".mp3")):
                 p = c if c.startswith("sound/") else f"sound/{c}"
                 if self.vfs.exists(p):
-                    return p
-            w = self.scripts.get(c.lower())
-            if w and self.vfs.exists(f"sound/{w}"):
-                return f"sound/{w}"
-        return None
+                    return [p]
+                continue
+            found = [f"sound/{w}" for w in self.scripts.get(c.lower(), []) if self.vfs.exists(f"sound/{w}")]
+            if found:
+                return found[:limit]
+        return []
 
-    def add(self, event_key: str, candidates: List[str], volume: float = 1.0) -> bool:
-        if self.encoder is None:
+    def add_files(self, event_key: str, files: List[str], volume: float = 1.0) -> bool:
+        if self.encoder is None or not files:
             return False
-        src = self.wav_for(candidates)
-        if src is None:
-            return False
-        data = self.vfs.read(src)
-        ogg = self._to_ogg(data, Path(src).suffix)
-        if ogg is None:
-            return False
-        rel = "tf2/" + event_key.replace(".", "_")
-        self.pack.add(f"assets/{MOD_ID}/sounds/{rel}.ogg", ogg)
-        self.events[event_key] = {"replace": True, "sounds": [{"name": f"{MOD_ID}:{rel}", "volume": volume}]}
-        return True
+        sounds = []
+        for k, src in enumerate(files):
+            ogg = self._to_ogg(self.vfs.read(src), Path(src).suffix)
+            if ogg is None:
+                continue
+            rel = "tf2/" + event_key.replace(".", "_") + (f"_{k}" if len(files) > 1 else "")
+            self.pack.add(f"assets/{MOD_ID}/sounds/{rel}.ogg", ogg)
+            sounds.append({"name": f"{MOD_ID}:{rel}", "volume": volume})
+        if sounds:
+            self.events[event_key] = {"replace": True, "sounds": sounds}
+        return bool(sounds)
+
+    def add(self, event_key: str, candidates: List[str], volume: float = 1.0, variants: int = 1) -> bool:
+        return self.add_files(event_key, self.files_for(candidates, variants), volume)
 
     def _to_ogg(self, data: bytes, suffix: str) -> Optional[bytes]:
         with tempfile.TemporaryDirectory() as td:
@@ -1142,7 +1102,7 @@ class PackWriter:
 
 # -------------------------------------------------------------------------- item model json
 
-def handheld_3d_model(tex_id: Optional[str]) -> dict:
+def handheld_3d_model(tex_id: Optional[str], melee: bool = False) -> dict:
     """Base model for special-rendered 3D weapons: only display transforms + particle."""
     m = {
         "textures": {"particle": tex_id or f"{MOD_ID}:item/placeholder"},
@@ -1211,7 +1171,8 @@ def run(args) -> int:
     tex = TextureCache(vfs, pack, args.max_texture)
     conv = ModelConverter(vfs, tex, args.max_texture)
     schema = ItemSchema(vfs)
-    manifest = {"format": 1, "players": [], "weapons": [], "props": [], "icons": [], "sounds": []}
+    manifest = {"format": 2, "players": [], "weapons": {}, "props": [], "gui": [], "sounds": []}
+    report: List[str] = []
 
     orient = {}
     if args.orient and Path(args.orient).is_file():
@@ -1223,24 +1184,35 @@ def run(args) -> int:
         resolved[wid] = info or {}
     if args.list_weapons:
         for wid, info in resolved.items():
-            print(f"{wid:22s} model={info.get('model_player') or info.get('model_world') or '-'}  icon={info.get('image_inventory') or '-'}")
+            print(f"{wid:22s} slot={anim_slot(wid, info):9s} model={info.get('model_player') or info.get('model_world') or '-'}"
+                  f"  icon={info.get('image_inventory') or '-'}")
         return 0
+
+    # which animation sets each class needs (TF2 animates by the weapon's slot/anim_slot)
+    class_slots: Dict[str, List[str]] = {c: ["PRIMARY", "SECONDARY", "MELEE"] for c in CLASSES}
+    for wid, info in resolved.items():
+        cls = WEAPON_CLASS.get(wid)
+        if cls:
+            s = anim_slot(wid, info)
+            if s not in class_slots[cls]:
+                class_slots[cls].append(s)
 
     # ---- player models
     if not args.skip_players:
-        print("Converting player models...")
+        print("Converting player models (with animations)...")
         for cls in CLASSES:
             path = f"models/player/{CLASS_MODEL[cls]}.mdl"
             try:
-                mesh = conv.player(path, args.player_scale)
+                mesh = conv.player(path, args.player_scale, class_slots[cls], report)
                 pack.add_json(f"assets/{MOD_ID}/merc_models/player/{cls}.json", mesh)
                 manifest["players"].append(cls)
-                print(f"  + {cls}")
+                print(f"  + {cls}: {len(mesh['clips'])} animations")
             except Exception as ex:
                 print(f"  ! {cls}: {ex}")
-        for cls in CLASSES:
-            if tex.export(f"hud/leaderboard_class_{cls}", opaque=False, dest_hint=f"gui/class/{cls}"):
-                manifest["icons"].append(f"class/{cls}")
+                report.append(f"{path}: FAILED {ex}")
+            arms = f"models/weapons/c_models/c_{CLASS_MODEL[cls]}_arms.mdl"
+            if vfs.exists(arms):
+                report.append(f"{arms} sequences: " + ", ".join(conv.sequences(arms)))
 
     # ---- weapons
     if not args.skip_weapons:
@@ -1248,46 +1220,36 @@ def run(args) -> int:
         for wid, info in resolved.items():
             mpath = info.get("model_player") or info.get("model_world")
             icon = info.get("image_inventory")
+            slot = anim_slot(wid, info)
             icon_id = None
             if isinstance(icon, str) and icon:
                 for cand in (f"{icon}_large", icon):
                     icon_id = tex.export(cand, opaque=False, dest_hint=f"item/tf2/{wid}")
                     if icon_id:
                         break
+            has_mesh = False
             if isinstance(mpath, str) and mpath and vfs.exists(mpath):
                 try:
-                    rot = tuple(orient.get(wid, {}).get("rotate", (0, 0, 0)))
-                    mesh = conv.static(mpath, size=float(orient.get(wid, {}).get("size", 1.0)), rotate=rot)
+                    o = orient.get(wid, {})
+                    mesh = conv.weapon(mpath, wid in MELEE_WEAPONS, tuple(o.get("rotate", (0, 0, 0))), float(o.get("size", 1.0)))
+                    mesh["anim_slot"] = slot
                     pack.add_json(f"assets/{MOD_ID}/merc_models/weapon/{wid}.json", mesh)
-                    manifest["weapons"].append(wid)
-                    base = f"{MOD_ID}:item/tf2/{wid}_3d"
-                    pack.add_json(f"assets/{MOD_ID}/models/item/tf2/{wid}_3d.json",
-                                  handheld_3d_model(f"{MOD_ID}:item/tf2/{wid}" if icon_id else None), compact=False)
-                    def special(skin: int) -> dict:
-                        return {"type": "minecraft:special", "base": base,
-                                "model": {"type": f"{MOD_ID}:merc_mesh", "mesh": f"weapon/{wid}", "skin": skin}}
-                    # weapons carry custom_model_data "red"/"blu" (set by the mod) to pick the team skin
-                    team_select = {"type": "minecraft:select", "property": "minecraft:custom_model_data", "index": 0,
-                                   "cases": [{"when": "blu", "model": special(1)}], "fallback": special(0)}
-                    gui_model = {"type": "minecraft:model", "model": f"{MOD_ID}:item/tf2/{wid}_icon"} if icon_id else team_select
-                    item_def = {"model": {
-                        "type": "minecraft:select", "property": "minecraft:display_context",
-                        "cases": [{"when": "gui", "model": gui_model}],
-                        "fallback": team_select,
-                    }}
-                    pack.add_json(f"assets/{MOD_ID}/items/{wid}.json", item_def, compact=False)
-                    print(f"  + {wid}  ({mpath})")
+                    has_mesh = True
+                    print(f"  + {wid:22s} [{slot}] {mpath}")
                 except Exception as ex:
                     print(f"  ! {wid}: {ex}")
+                    report.append(f"weapon {wid}: FAILED {mpath}: {ex}")
             else:
                 print(f"  - {wid}: no 3D model found (icon {'ok' if icon_id else 'missing'})")
+                report.append(f"weapon {wid}: no model (items_game entry {'found' if info else 'NOT found'})")
+            manifest["weapons"][wid] = {"anim_slot": slot, "mesh": has_mesh, "icon": bool(icon_id)}
             if icon_id:
                 pack.add_json(f"assets/{MOD_ID}/models/item/tf2/{wid}_icon.json",
                               {"parent": "minecraft:item/generated", "textures": {"layer0": f"{MOD_ID}:item/tf2/{wid}"}})
-                if wid not in manifest["weapons"]:
-                    pack.add_json(f"assets/{MOD_ID}/items/{wid}.json",
-                                  {"model": {"type": "minecraft:model", "model": f"{MOD_ID}:item/tf2/{wid}_icon"}})
-                manifest["icons"].append(f"item/{wid}")
+            pack.add_json(f"assets/{MOD_ID}/items/{wid}.json", item_definition(wid, has_mesh, bool(icon_id)), compact=False)
+            if has_mesh:
+                pack.add_json(f"assets/{MOD_ID}/models/item/tf2/{wid}_3d.json",
+                              handheld_3d_model(f"{MOD_ID}:item/tf2/{wid}" if icon_id else None, wid in MELEE_WEAPONS), compact=False)
 
         print("Converting projectiles & buildings...")
         for pid, paths in PROPS.items():
@@ -1295,14 +1257,27 @@ def run(args) -> int:
                 if vfs.exists(p):
                     try:
                         building = pid in ("sentry", "dispenser")
-                        rot = tuple(orient.get(pid, {}).get("rotate", (0, 0, 0)))
-                        mesh = conv.static(p, size=1.0, rotate=rot, center=not building)
+                        mesh = conv.static(p, size=1.0, rotate=tuple(orient.get(pid, {}).get("rotate", (0, 0, 0))), center=not building)
                         pack.add_json(f"assets/{MOD_ID}/merc_models/prop/{pid}.json", mesh)
                         manifest["props"].append(pid)
                         print(f"  + {pid}")
                     except Exception as ex:
                         print(f"  ! {pid}: {ex}")
                     break
+
+    # ---- HUD / menu art
+    if not args.skip_gui:
+        print("Extracting HUD and menu art...")
+        for key, cands in gui_textures().items():
+            got = None
+            for c in cands:
+                got = tex.export(c, opaque=False, dest_hint=f"gui/tf2/{key}")
+                if got:
+                    break
+            if got:
+                manifest["gui"].append(key)
+            report.append(f"gui {key}: {'ok' if got else 'missing (tried ' + ', '.join(cands) + ')'}")
+        print(f"  {len(manifest['gui'])} images")
 
     # ---- sounds
     if not args.skip_sounds:
@@ -1311,31 +1286,37 @@ def run(args) -> int:
             print("Sounds skipped: install ffmpeg (on PATH) or `pip install soundfile` to convert sounds.")
         else:
             print(f"Converting sounds (encoder: {sb.encoder})...")
-            ok = 0
             for wid, info in resolved.items():
-                cands = []
+                cands: Dict[str, List[str]] = {k: [] for k in WEAPON_SOUND_KEYS}
                 vis = info.get("visuals") if isinstance(info.get("visuals"), dict) else {}
-                for key in ("sound_single_shot", "sound_melee_miss", "sound_burst"):
-                    if isinstance(vis.get(key), str):
-                        cands.append(vis[key])
+                for ev, keys in WEAPON_SOUND_KEYS.items():
+                    for k in keys:
+                        if isinstance(vis.get(f"sound_{k}"), str):
+                            cands[ev].append(vis[f"sound_{k}"])
                 ic = info.get("item_class")
                 if isinstance(ic, str):
                     script = vfs.read(f"scripts/{ic}.txt")
                     if script:
                         sd = parse_kv(decode_text(script)).node("WeaponData").node("SoundData")
-                        for key in ("single_shot", "melee_miss", "burst"):
-                            if sd.str(key):
-                                cands.append(sd.str(key))
-                if sb.add(f"weapon.{wid}.fire", cands):
-                    ok += 1
-                    manifest["sounds"].append(f"weapon.{wid}.fire")
-            for key, cands in SHARED_SOUNDS.items():
-                if sb.add(f"fx.{key}", cands):
-                    ok += 1
+                        for ev, keys in WEAPON_SOUND_KEYS.items():
+                            cands[ev] += [sd.str(k) for k in keys if sd.str(k)]
+                for ev, c in cands.items():
+                    if c and sb.add(f"weapon.{wid}.{ev}", c, variants=3):
+                        manifest["sounds"].append(f"weapon.{wid}.{ev}")
+            for key, c in SHARED_SOUNDS.items():
+                if sb.add(f"fx.{key}", c, variants=3):
                     manifest["sounds"].append(f"fx.{key}")
+            for cls in CLASSES:
+                for ev, prefixes in VOICE_EVENTS.items():
+                    files = []
+                    for pre in prefixes:
+                        files += [f for f in vfs.list(f"sound/vo/{cls}_{pre}") if f.endswith((".mp3", ".wav"))]
+                    if sb.add_files(f"class.{cls}.{ev}", files[:6], 0.9):
+                        manifest["sounds"].append(f"class.{cls}.{ev}")
             if sb.events:
                 pack.add_json(f"assets/{MOD_ID}/sounds.json", sb.events, compact=False)
-            print(f"  {ok} sounds converted")
+            print(f"  {len(sb.events)} sound events converted")
+            report.append(f"sounds: {len(sb.events)} events: " + ", ".join(sorted(sb.events)))
 
     pack.add_json(f"assets/{MOD_ID}/merc_models/manifest.json", manifest, compact=False)
     pack.add_json("pack.mcmeta", {"pack": {
@@ -1346,9 +1327,58 @@ def run(args) -> int:
         "Team Fortress 2 assets are (c) Valve Corporation. This pack is for personal use with the\n"
         "Mercenaries Minecraft mod and must not be redistributed.\n").encode())
     pack.write()
+    rep = out.with_name(out.stem + "_report.txt")
+    rep.write_text("\n".join(report), encoding="utf-8")
     print(f"\nWrote {out}  ({out.stat().st_size / 1e6:.1f} MB, {len(pack.files)} files)")
+    print(f"Report (no Valve content, safe to share): {rep}")
     print("Enable it in Minecraft: Options > Resource Packs (put it above any other pack).")
     return 0
+
+
+def anim_slot(wid: str, info: dict) -> str:
+    """TF2's own animation slot for a weapon (items_game anim_slot, else item_slot)."""
+    s = info.get("anim_slot") or info.get("item_slot") or WEAPON_SLOT_FALLBACK.get(wid, "primary")
+    s = str(s).upper()
+    return {"PDA2": "PDA", "BUILDING": "BUILDING"}.get(s, s)
+
+
+def item_definition(wid: str, has_mesh: bool, has_icon: bool) -> dict:
+    flat = {"type": "minecraft:model", "model": f"{MOD_ID}:item/tf2/{wid}_icon" if has_icon else f"{MOD_ID}:item/{wid}"}
+    if not has_mesh:
+        return {"model": flat}
+    base = f"{MOD_ID}:item/tf2/{wid}_3d"
+
+    def special(skin: int) -> dict:
+        return {"type": "minecraft:special", "base": base,
+                "model": {"type": f"{MOD_ID}:merc_mesh", "mesh": f"weapon/{wid}", "skin": skin}}
+    team = {"type": "minecraft:select", "property": "minecraft:custom_model_data", "index": 0,
+            "cases": [{"when": "blu", "model": special(1)}], "fallback": special(0)}
+    return {"model": {
+        "type": "minecraft:select", "property": "minecraft:display_context",
+        "cases": [
+            {"when": "gui", "model": flat},
+            # third person: the mod draws the weapon on the TF2 skeleton's hand bone instead
+            {"when": ["thirdperson_righthand", "thirdperson_lefthand"], "model": {"type": "minecraft:empty"}},
+        ],
+        "fallback": team,
+    }}
+
+
+def gui_textures() -> Dict[str, List[str]]:
+    t = {
+        "health_bg": ["hud/health_bg"], "health_color": ["hud/health_color"],
+        "health_over": ["hud/health_over_bg"], "health_dead": ["hud/health_dead"],
+        "ammo_red": ["hud/ammo_red_bg"], "ammo_blu": ["hud/ammo_blue_bg"],
+        "misc_red": ["hud/misc_ammo_area_red"], "misc_blu": ["hud/misc_ammo_area_blue"],
+        "crosshair": ["vgui/crosshairs/crosshair3", "vgui/crosshairs/default", "vgui/crosshairs/crosshair1"],
+    }
+    for cls in CLASSES:
+        t[f"class_{cls}_red"] = [f"vgui/class_sel_sm_{cls}_red", f"hud/class_{cls}red"]
+        t[f"class_{cls}_blu"] = [f"vgui/class_sel_sm_{cls}_blu", f"hud/class_{cls}blue"]
+        t[f"portrait_{cls}_red"] = [f"hud/class_{cls}red", f"vgui/class_sel_sm_{cls}_red"]
+        t[f"portrait_{cls}_blu"] = [f"hud/class_{cls}blue", f"vgui/class_sel_sm_{cls}_blu"]
+        t[f"icon_{cls}"] = [f"hud/leaderboard_class_{cls}"]
+    return t
 
 
 def main(argv=None) -> int:
@@ -1361,6 +1391,7 @@ def main(argv=None) -> int:
     ap.add_argument("--skip-players", action="store_true")
     ap.add_argument("--skip-weapons", action="store_true")
     ap.add_argument("--skip-sounds", action="store_true")
+    ap.add_argument("--skip-gui", action="store_true")
     ap.add_argument("--list-weapons", action="store_true", help="print weapon -> TF2 model mapping and exit")
     return run(ap.parse_args(argv))
 

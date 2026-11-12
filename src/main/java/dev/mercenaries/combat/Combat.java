@@ -345,7 +345,8 @@ public final class Combat {
 					}
 					modified *= (float) critMultiplier(ap, victim, crit);
 					onHitEffects(ap, victim, d, modified);
-					victim.level().playSound(null, victim.getX(), victim.getY(), victim.getZ(), MercSounds.fx("melee_hit"), SoundSource.PLAYERS, 0.7f, 1f);
+					var hitSound = MercSounds.weapon(d, "hit");
+					victim.level().playSound(null, victim.getX(), victim.getY(), victim.getZ(), hitSound != null ? hitSound : MercSounds.fx("melee_hit"), SoundSource.PLAYERS, 0.8f, 1f);
 				} else if (!classMatches(ap, d)) {
 					modified = 1f;
 				}

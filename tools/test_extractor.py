@@ -10,6 +10,8 @@ Run:  python test_extractor.py
 """
 import io
 import json
+import math
+import re
 import struct
 import sys
 import tempfile
@@ -154,7 +156,11 @@ def build_model(bone_defs, tris_per_bone, material_name, cd_dir):
     bone_name_fix = []
     for i, (name, parent, pos) in enumerate(bone_defs):
         b = bytearray(216)
-        struct.pack_into("<ii", b, 4 - 4, 0, parent)
+        struct.pack_into("<ii", b, 0, 0, parent)
+        struct.pack_into("<3f", b, 32, *pos) if parent < 0 else struct.pack_into("<3f", b, 32, *(np.array(pos) - np.array(bone_defs[parent][2])))
+        struct.pack_into("<4f", b, 44, 0, 0, 0, 1)
+        struct.pack_into("<3f", b, 72, 1 / 32.0, 1 / 32.0, 1 / 32.0)
+        struct.pack_into("<3f", b, 84, 1 / 4096.0, 1 / 4096.0, 1 / 4096.0)
         # poseToBone = [I | -pos]
         m = [1, 0, 0, -pos[0], 0, 1, 0, -pos[1], 0, 0, 1, -pos[2]]
         struct.pack_into("<12f", b, 96, *m)
@@ -199,6 +205,50 @@ def build_model_two_tex(bones, name_red, name_blue, cd):
     struct.pack_into("<i", mdl, new_idx + 64, name_abs - (new_idx + 64))
     struct.pack_into("<ii", mdl, 204, 2, new_idx)
     return bytes(mdl), vvd, vtx
+
+# ----------------------------------------------------------------- animation writer (test data only)
+
+
+def rle(values):
+    """Encode int16 values as one (valid, total) run, the layout the reader expects."""
+    out = struct.pack("<BB", len(values), len(values))
+    for v in values:
+        out += struct.pack("<h", v)
+    return out
+
+
+def add_animation(mdl: bytes, nbones: int) -> bytes:
+    """Appends one animdesc + one sequence 'run_PRIMARY' (5 frames) to a synthetic MDL."""
+    mdl = bytearray(mdl)
+    desc_off = len(mdl)
+    mdl += bytearray(100)
+    anim_off = len(mdl)
+    # bone 0: raw rot (identity) + raw pos (1,2,3)
+    q48 = struct.pack("<HHH", 32768, 32768, 16384)
+    v48 = np.array([1.0, 2.0, 3.0], "<f2").tobytes()
+    rec0 = struct.pack("<BBh", 0, 0x02 | 0x01, 0) + q48 + v48
+    # bone 3: ANIMROT with yaw channel RLE: [0, 512, 1024] then repeats last value
+    vp = struct.pack("<3h", 0, 0, 6)  # offsets relative to the valueptr struct; x,y unused
+    rec3 = struct.pack("<BBh", 3, 0x08, 0) + vp + struct.pack("<BB", 3, 5) + struct.pack("<3h", 0, 512, 1024)
+    rec0 = bytearray(rec0)
+    struct.pack_into("<h", rec0, 2, len(rec0))
+    mdl += rec0 + rec3
+    name_off = len(mdl)
+    mdl += b"a_run\0"
+    struct.pack_into("<iifii", mdl, desc_off, -desc_off, name_off - desc_off, 30.0, 1, 5)
+    struct.pack_into("<ii", mdl, desc_off + 52, 0, anim_off - desc_off)
+    seq_off = len(mdl)
+    mdl += bytearray(212)
+    blend_off = len(mdl)
+    mdl += struct.pack("<h", 0)
+    label_off = len(mdl)
+    mdl += b"run_PRIMARY\0"
+    struct.pack_into("<iiii", mdl, seq_off, -seq_off, label_off - seq_off, 0, 1)
+    struct.pack_into("<ii", mdl, seq_off + 56, 1, blend_off - seq_off)
+    struct.pack_into("<2i", mdl, seq_off + 68, 1, 1)
+    struct.pack_into("<iiii", mdl, 180, 1, desc_off, 1, seq_off)
+    return bytes(mdl)
+
 
 # ----------------------------------------------------------------- VPK writer
 
@@ -278,16 +328,49 @@ def main():
             "scripts/game_sounds_manifest.txt": b'"game_sounds_manifest" { "precache_file" "scripts/game_sounds_weapons.txt" }',
             "scripts/game_sounds_weapons.txt": b'"Weapon_Scatter_Gun.Single" { "channel" "CHAN_WEAPON" "wave" ")weapons/scatter_gun_shoot.wav" }',
             "sound/weapons/scatter_gun_shoot.wav": wav_bytes(),
+            "sound/vo/scout_painsharp01.mp3": wav_bytes(),
+            "sound/vo/scout_painsevere01.mp3": wav_bytes(),
         }
         write_vpk(root / "tf/tf2_misc_dir.vpk", files)
 
         vfs = ex.VFS(root)
         assert vfs.read("models/player/scout.mdl") == mdl, "VPK round-trip failed"
-        m = ex.read_mdl(vfs, "models/player/scout.mdl")
+        m = ex.studiomdl.load(vfs.read, "models/player/scout.mdl")
         assert len(m.bones) == len(bones) and m.bones[3].name == "bip_upperArm_R"
         assert np.allclose(m.bones[4].world_pos, (0, -30, 60))
+        assert m.meshes[0].weights.shape[1] == 3 and np.allclose(m.meshes[0].weights.sum(1), 1)
         assert len(m.meshes) == 1 and len(m.meshes[0].indices) == len(bones) * 2 * 3
         print(f"  MDL parsed: {len(m.bones)} bones, {len(m.meshes[0].indices)//3} tris, skins={m.skins}")
+
+        # ---- animation decoding (raw + RLE tracks)
+        anim_mdl = add_animation(mdl, len(bones))
+        files["models/player/scout.mdl"] = anim_mdl
+        write_vpk(root / "tf/tf2_misc_dir.vpk", files)
+        vfs = ex.VFS(root)
+        am = ex.studiomdl.load(vfs.read, "models/player/scout.mdl")
+        assert [s.label for s in am.seqs] == ["run_PRIMARY"], [s.label for s in am.seqs]
+        pos, quat = ex.studiomdl.decode_frame(am, am.anims[0], 3)
+        assert np.allclose(pos[0], (1.0, 2.0, 3.0), atol=1e-2), pos[0]
+        assert np.allclose(quat[0], (0, 0, 0, 1), atol=1e-3), quat[0]
+        # RLE yaw on bone 3: frames 0..4 = 0, 512, 1024, 1024(repeat), ... scaled by rotscale 1/4096
+        _, q2 = ex.studiomdl.decode_frame(am, am.anims[0], 2)
+        yaw = 2 * math.atan2(q2[3][2], q2[3][3])
+        assert abs(yaw - 1024 / 4096.0) < 1e-3, yaw
+        _, q3 = ex.studiomdl.decode_frame(am, am.anims[0], 4)
+        assert abs(2 * math.atan2(q3[3][2], q3[3][3]) - 1024 / 4096.0) < 1e-3
+        print("  animation decode (raw pos/rot, RLE euler) OK")
+
+        # orientation from skeleton: synthetic model faces +X with left = +Y
+        left, up, fwd = ex.skeleton_basis(am.bones)
+        assert np.allclose(left, (0, 1, 0)) and np.allclose(up, (0, 0, 1)) and np.allclose(fwd, (1, 0, 0)), (left, up, fwd)
+        # rotate the whole skeleton 90 degrees about Z: detection must follow
+        rz = np.array([[0, -1, 0, 0], [1, 0, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]], float)
+        for bn in am.bones:
+            bw = rz @ bn.bind_world
+            bn.p2b = np.linalg.inv(bw)[:3]
+        left2, _, fwd2 = ex.skeleton_basis(am.bones)
+        assert np.allclose(fwd2, (0, 1, 0)) and np.allclose(left2, (-1, 0, 0)), (left2, fwd2)
+        print("  skeleton-based orientation OK (also for a model rotated 90 degrees)")
 
         out = Path(td) / "pack.zip"
         rc = ex.main(["--tf2", str(root), "--out", str(out)])
@@ -296,27 +379,43 @@ def main():
         names = set(z.namelist())
         need = ["pack.mcmeta", "assets/mercenaries/merc_models/player/scout.json",
                 "assets/mercenaries/merc_models/weapon/scattergun.json", "assets/mercenaries/items/scattergun.json",
-                "assets/mercenaries/textures/item/tf2/scattergun.png", "assets/mercenaries/textures/gui/class/scout.png",
-                "assets/mercenaries/merc_models/manifest.json"]
+                "assets/mercenaries/textures/item/tf2/scattergun.png", "assets/mercenaries/merc_models/manifest.json"]
         for n in need:
             assert n in names, f"missing {n}"
         player = json.loads(z.read("assets/mercenaries/merc_models/player/scout.json"))
-        assert set(player["parts"]) >= {"head", "body", "right_arm", "left_arm", "right_leg", "left_leg"}, player["parts"].keys()
+        assert player["kind"] == "skinned" and "run_primary" in player["clips"], player.get("clips", {}).keys()
         assert player["skins"][0][0] != player["skins"][1][0], "red/blue skins should differ"
-        assert all(t for fam in player["skins"] for t in fam), player["skins"]
-        # right arm pivot should be on entity's right (-x) and the arm should hang straight down after baking
-        ra = player["parts"]["right_arm"]
-        assert ra["pivot"][0] < 0, ra["pivot"]
-        v = np.array(ra["meshes"][0]["v"]).reshape(-1, 3)
-        assert v[:, 1].max() > abs(v[:, 0]).max(), "arm not straightened downward"
+        clip = player["clips"]["run_primary"]
+        assert clip["frames"] == 5 and 3 in clip["anim"], clip["anim"]
+        assert len(clip["data"]) == clip["frames"] * len(clip["anim"]) * 7
+        mesh0 = player["meshes"][0]
+        assert len(mesh0["bi"]) == len(mesh0["v"]) and len(mesh0["bw"]) == len(mesh0["v"])
+        # to_entity maps the synthetic forward (+X) to entity -z, up (+Z) to entity -y, feet to y=1.5
+        M = np.array(player["to_entity"]).reshape(4, 4)
+        assert M[2, 0] < 0 and M[1, 2] < 0 and abs(M[1, 3] - (1.5 + 0 * M[0, 1])) < 0.2, M
+        weapon = json.loads(z.read("assets/mercenaries/merc_models/weapon/scattergun.json"))
+        assert weapon["kind"] == "weapon" and weapon["attach"]["bones"] and weapon["anim_slot"] == "PRIMARY", weapon.get("anim_slot")
+        item = json.loads(z.read("assets/mercenaries/items/scattergun.json"))
+        assert item["model"]["cases"][1]["model"]["type"] == "minecraft:empty"
         for tid in player["skins"][0] + player["skins"][1]:
-            path = "assets/" + tid.replace(":", "/", 1)
-            assert path in names, path
+            assert "assets/" + tid.replace(":", "/", 1) in names, tid
         if "assets/mercenaries/sounds.json" in names:
             sj = json.loads(z.read("assets/mercenaries/sounds.json"))
-            assert "weapon.scattergun.fire" in sj
-            print("  sound conversion OK")
+            assert "weapon.scattergun.fire" in sj, sorted(sj)
+            assert "class.scout.pain" in sj, sorted(sj)
+            assert len(sj["class.scout.pain"]["sounds"]) == 2
+            print("  sound conversion OK (weapon + class voice variants)")
+        rep = out.with_name(out.stem + "_report.txt").read_text()
+        assert "run_PRIMARY" in rep or "run_primary" in rep
         print(f"  pack OK: {len(names)} files")
+
+    # every weapon id registered by the Java mod must have an extractor entry
+    java = (Path(__file__).resolve().parents[1] / "src/main/java/dev/mercenaries/weapon/Weapons.java").read_text()
+    java_ids = set(re.findall(r'WeaponDef\.of\("(\w+)"', java))
+    missing = java_ids - set(ex.WEAPONS)
+    assert not missing, f"weapons missing from extractor table: {sorted(missing)}"
+    assert java_ids <= set(ex.WEAPON_CLASS), sorted(java_ids - set(ex.WEAPON_CLASS))
+    print(f"  all {len(java_ids)} mod weapons are mapped in the extractor")
     print("ALL TESTS PASSED")
 
 

@@ -41,6 +41,7 @@ public final class MercServer {
 	private static final Identifier HEALTH_MOD = Mercenaries.id("class_health");
 	private static final Identifier SPEED_MOD = Mercenaries.id("class_speed");
 	private static final Identifier KB_MOD = Mercenaries.id("class_knockback");
+	private static final java.util.Map<java.util.UUID, Long> LAST_PAIN = new java.util.concurrent.ConcurrentHashMap<>();
 
 	public static void init() {
 		ServerPlayNetworking.registerGlobalReceiver(MercPayloads.Select.TYPE, (payload, ctx) -> ctx.player().level().getServer().execute(() -> select(ctx.player(), payload)));
@@ -52,6 +53,7 @@ public final class MercServer {
 				case MercPayloads.Action.RELOAD -> WeaponHandler.requestReload(p);
 				case MercPayloads.Action.ABILITY -> WeaponHandler.toggleCloak(p);
 				case MercPayloads.Action.DEMOLISH -> WeaponHandler.demolish(p);
+				case MercPayloads.Action.MEDIC -> WeaponHandler.callMedic(p);
 				default -> {
 				}
 			}
@@ -73,6 +75,26 @@ public final class MercServer {
 		});
 
 		ServerLivingEntityEvents.ALLOW_DAMAGE.register(Combat::allowDamage);
+
+		// TF2 voice lines on pain / death (from the extracted pack; silent without it)
+		ServerLivingEntityEvents.AFTER_DAMAGE.register((entity, source, base, taken, blocked) -> {
+			if (!(entity instanceof ServerPlayer p) || taken <= 0 || !p.isAlive()) return;
+			MercData.Loadout l = MercData.loadout(p);
+			if (!l.active()) return;
+			long now = p.level().getGameTime();
+			Long last = LAST_PAIN.get(p.getUUID());
+			if (last != null && now - last < 12) return;
+			LAST_PAIN.put(p.getUUID(), now);
+			var ev = MercSounds.voice(l.mercClass(), "pain");
+			if (ev != null) p.level().playSound(null, p.getX(), p.getY(), p.getZ(), ev, net.minecraft.sounds.SoundSource.PLAYERS, 1f, 1f);
+		});
+		ServerLivingEntityEvents.AFTER_DEATH.register((entity, source) -> {
+			if (!(entity instanceof ServerPlayer p)) return;
+			MercData.Loadout l = MercData.loadout(p);
+			if (!l.active()) return;
+			var ev = MercSounds.voice(l.mercClass(), "death");
+			if (ev != null) p.level().playSound(null, p.getX(), p.getY(), p.getZ(), ev, net.minecraft.sounds.SoundSource.PLAYERS, 1.2f, 1f);
+		});
 
 		// Merc weapons never leave as item entities (death drops, Q-drops); missing ones are re-issued.
 		ServerEntityEvents.ENTITY_LOAD.register((entity, level) -> {

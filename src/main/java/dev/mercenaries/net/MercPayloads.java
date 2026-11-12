@@ -43,7 +43,7 @@ public final class MercPayloads {
 
 	/** Client -> server: one-shot actions. */
 	public record Action(int action) implements CustomPacketPayload {
-		public static final int RELOAD = 0, ABILITY = 1, DEMOLISH = 2;
+		public static final int RELOAD = 0, ABILITY = 1, DEMOLISH = 2, MEDIC = 3;
 		public static final Type<Action> TYPE = new Type<>(Mercenaries.id("action"));
 		public static final StreamCodec<RegistryFriendlyByteBuf, Action> CODEC = StreamCodec.composite(ByteBufCodecs.VAR_INT, Action::action, Action::new);
 

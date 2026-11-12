@@ -58,6 +58,7 @@ public final class WeaponHandler {
 		int lastFiredTick;
 		boolean scoped;
 		long consumeUntil;
+		String lastHeld = "";
 	}
 
 	private static final Map<UUID, State> STATES = new ConcurrentHashMap<>();
@@ -103,6 +104,12 @@ public final class WeaponHandler {
 		ItemStack held = p.getMainHandItem();
 		WeaponDef def = held.getItem() instanceof MercWeaponItem w ? w.def() : null;
 		float speedMod = 0f;
+		String heldId = def == null ? "" : def.id();
+		if (!heldId.equals(st.lastHeld)) {
+			st.lastHeld = heldId;
+			st.reloadAt = 0;
+			if (def != null) playWeapon(p, def, "deploy", 0.8f);
+		}
 
 		if (def != null && Combat.classMatches(p, def) && !status.cloaked() && !Combat.bonked(p)) {
 			speedMod = handleWeapon(p, level, st, def, held, now);
@@ -333,7 +340,9 @@ public final class WeaponHandler {
 				boolean wantFire = auto ? st.primary : pressedP;
 				if (wantFire && now >= st.nextFire) {
 					if (!consumeAmmo(held, def)) {
+						if (MercWeaponItem.reserve(held) <= 0 && pressedP) playWeapon(p, def, "empty", 0.7f);
 						startReload(p, st, def, held);
+						st.nextFire = now + 6;
 						return 0f;
 					}
 					switch (def.kind()) {
@@ -371,11 +380,16 @@ public final class WeaponHandler {
 		if (def.clip() <= 0 || st.reloadAt > 0) return;
 		if (MercWeaponItem.clip(held) >= def.clip() || MercWeaponItem.reserve(held) <= 0) return;
 		st.reloadAt = p.level().getGameTime() + Math.max(1, def.reloadTicks());
-		play(p, "reload", 0.6f);
+		playWeapon(p, def, "reload", 0.8f);
 	}
 
 	private static void play(ServerPlayer p, WeaponDef def) {
 		p.level().playSound(null, p.getX(), p.getY(), p.getZ(), MercSounds.fire(def), SoundSource.PLAYERS, 1f, 0.95f + p.getRandom().nextFloat() * 0.1f);
+	}
+
+	private static void playWeapon(ServerPlayer p, WeaponDef def, String key, float vol) {
+		var ev = MercSounds.weapon(def, key);
+		if (ev != null) p.level().playSound(null, p.getX(), p.getY(), p.getZ(), ev, SoundSource.PLAYERS, vol, 1f);
 	}
 
 	private static void play(ServerPlayer p, String fx, float vol) {
@@ -495,6 +509,8 @@ public final class WeaponHandler {
 			LivingEntity t = healTarget(p, level, st);
 			if (t != null) MercData.setStatus(t, MercData.status(t).withUberTicks(160, kritz));
 			play(p, "uber", 1f);
+			var cry = MercSounds.voice(MercClass.MEDIC, "battlecry");
+			if (cry != null) level.playSound(null, p.getX(), p.getY(), p.getZ(), cry, SoundSource.PLAYERS, 1f, 1f);
 			return;
 		}
 		if (!st.primary) {
@@ -616,6 +632,27 @@ public final class WeaponHandler {
 		} else if (hit.entity() instanceof Mob m && Combat.canHurt(p, m)) {
 			m.addEffect(new MobEffectInstance(MobEffects.SLOWNESS, 60, 5));
 			m.addEffect(new MobEffectInstance(MobEffects.WEAKNESS, 60, 2));
+		}
+	}
+
+	// ------------------------------------------------------------------ voice
+
+	/** "MEDIC!" call: plays the class's voice line and tells nearby teammate Medics. */
+	public static void callMedic(ServerPlayer p) {
+		MercData.Loadout l = MercData.loadout(p);
+		if (!l.active()) return;
+		State st = state(p);
+		long now = p.level().getGameTime();
+		if (now < st.consumeUntil) return;
+		st.consumeUntil = now + 40;
+		var ev = MercSounds.voice(l.mercClass(), "medic");
+		if (ev != null) p.level().playSound(null, p.getX(), p.getY(), p.getZ(), ev, SoundSource.PLAYERS, 1.2f, 1f);
+		((ServerLevel) p.level()).sendParticles(ParticleTypes.HEART, p.getX(), p.getY() + 2.3, p.getZ(), 3, 0.2, 0.1, 0.2, 0);
+		for (ServerPlayer other : ((ServerLevel) p.level()).players()) {
+			MercData.Loadout ol = MercData.loadout(other);
+			if (other != p && ol.mercClass() == MercClass.MEDIC && ol.mercTeam() == l.mercTeam() && other.distanceTo(p) < 64) {
+				other.sendOverlayMessage(Component.literal(p.getName().getString() + ": MEDIC! (" + (int) other.distanceTo(p) + "m)").withStyle(l.mercTeam().chat));
+			}
 		}
 	}
 

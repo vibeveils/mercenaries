@@ -48,6 +48,8 @@ public final class MercenariesClient implements ClientModInitializer {
 			new KeyMapping("key.mercenaries.reload", InputConstants.Type.KEYBOARD, SDLScancode.SDL_SCANCODE_R, CATEGORY));
 	public static final KeyMapping ABILITY = KeyMappingHelper.registerKeyMapping(
 			new KeyMapping("key.mercenaries.ability", InputConstants.Type.KEYBOARD, SDLScancode.SDL_SCANCODE_V, CATEGORY));
+	public static final KeyMapping MEDIC = KeyMappingHelper.registerKeyMapping(
+			new KeyMapping("key.mercenaries.medic", InputConstants.Type.KEYBOARD, SDLScancode.SDL_SCANCODE_Z, CATEGORY));
 
 	private int lastButtons = -1;
 	private int sendTimer;
@@ -66,6 +68,8 @@ public final class MercenariesClient implements ClientModInitializer {
 		});
 
 		HudElementRegistry.attachElementAfter(VanillaHudElements.HOTBAR, Mercenaries.id("hud"), MercHud::extract);
+		HudElementRegistry.replaceElement(VanillaHudElements.HEALTH_BAR, MercHud::healthReplacement);
+		HudElementRegistry.replaceElement(VanillaHudElements.CROSSHAIR, MercHud::crosshairReplacement);
 
 		ClientPlayNetworking.registerGlobalReceiver(MercPayloads.OpenPicker.TYPE, (payload, ctx) ->
 				ctx.client().execute(() -> ctx.client().gui.setScreen(new LoadoutScreen(payload.firstTime()))));
@@ -101,6 +105,7 @@ public final class MercenariesClient implements ClientModInitializer {
 		while (LOADOUT.consumeClick()) mc.gui.setScreen(new LoadoutScreen(false));
 		while (RELOAD.consumeClick()) ClientPlayNetworking.send(new MercPayloads.Action(MercPayloads.Action.RELOAD));
 		while (ABILITY.consumeClick()) ClientPlayNetworking.send(new MercPayloads.Action(MercPayloads.Action.ABILITY));
+		while (MEDIC.consumeClick()) ClientPlayNetworking.send(new MercPayloads.Action(MercPayloads.Action.MEDIC));
 
 		// mouse state for ranged weapons
 		WeaponDef def = rangedHeld(p);

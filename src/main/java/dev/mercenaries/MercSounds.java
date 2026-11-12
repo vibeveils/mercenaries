@@ -34,13 +34,29 @@ public final class MercSounds {
 		return e;
 	}
 
+	/** Per-weapon events; the extracted pack fills them from TF2's own weapon scripts. */
+	public static final String[] WEAPON_KEYS = {"fire", "reload", "hit", "hit_world", "deploy", "empty"};
+	/** Per-class voice events (vo/<class>_*.mp3 in TF2). */
+	public static final String[] VOICE_KEYS = {"pain", "death", "medic", "battlecry"};
+
 	public static void register() {
-		for (WeaponDef d : Weapons.all()) reg("weapon." + d.id() + ".fire");
+		for (WeaponDef d : Weapons.all()) for (String k : WEAPON_KEYS) reg("weapon." + d.id() + "." + k);
 		for (String fx : FX) reg("fx." + fx);
+		for (MercClass c : MercClass.values()) {
+			if (c != MercClass.NONE) for (String k : VOICE_KEYS) reg("class." + c.id() + "." + k);
+		}
 	}
 
 	public static SoundEvent fire(WeaponDef d) {
 		return EVENTS.get("weapon." + d.id() + ".fire");
+	}
+
+	public static SoundEvent weapon(WeaponDef d, String key) {
+		return EVENTS.get("weapon." + d.id() + "." + key);
+	}
+
+	public static SoundEvent voice(MercClass c, String key) {
+		return EVENTS.get("class." + c.id() + "." + key);
 	}
 
 	public static SoundEvent fx(String name) {

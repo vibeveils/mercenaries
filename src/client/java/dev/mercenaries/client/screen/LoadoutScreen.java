@@ -129,13 +129,18 @@ public class LoadoutScreen extends Screen {
 		g.centeredText(font, title, width / 2, 12, CommonColors.WHITE);
 		if (firstTime) g.centeredText(font, "You can change this any time with the loadout key (M).", width / 2, 24, 0xFFAAAAAA);
 
-		// class icons from the extracted pack, if present
+		// TF2 class-select portraits (or leaderboard icons) from the extracted pack, if present
 		MercClass[] all = MercClass.values();
+		String t = team == MercTeam.BLU ? "blu" : "red";
 		for (int i = 1; i < all.length; i++) {
-			Identifier icon = Mercenaries.id("textures/gui/class/" + all[i].id() + ".png");
-			if (Minecraft.getInstance().getResourceManager().getResource(icon).isPresent()) {
-				int col = (i - 1) % 3, row = (i - 1) / 3;
-				g.blit(RenderPipelines.GUI_TEXTURED, icon, x0 + col * 40 + 11, y0 + 30 + row * 44 + 4, 0f, 0f, 16, 16, 16, 16);
+			int col = (i - 1) % 3, row = (i - 1) / 3;
+			int bx = x0 + col * 40, by = y0 + 30 + row * 44;
+			Identifier big = Mercenaries.id("textures/gui/tf2/class_" + all[i].id() + "_" + t + ".png");
+			Identifier small = Mercenaries.id("textures/gui/tf2/icon_" + all[i].id() + ".png");
+			if (exists(big)) {
+				g.blit(RenderPipelines.GUI_TEXTURED, big, bx + 3, by + 1, 0f, 0f, 32, 30, 32, 30);
+			} else if (exists(small)) {
+				g.blit(RenderPipelines.GUI_TEXTURED, small, bx + 11, by + 4, 0f, 0f, 16, 16, 16, 16);
 			}
 		}
 
@@ -159,10 +164,12 @@ public class LoadoutScreen extends Screen {
 			g.fill(rx + 22, y, rx + 238, y + 46, 0xA0101010);
 			g.text(font, labels[s], rx + 26, y - 9, 0xFFC8A15A, false);
 			if (d == null) continue;
+			Identifier icon = Mercenaries.id("textures/item/tf2/" + d.id() + ".png");
+			if (exists(icon)) g.blit(RenderPipelines.GUI_TEXTURED, icon, rx + 196, y + 4, 0f, 0f, 38, 38, 38, 38);
 			int n = Weapons.options(cls, SLOTS[s]).size();
 			g.text(font, d.name() + (n > 1 ? "  (" + (choice[s] + 1) + "/" + n + ")" : ""), rx + 26, y + 4, CommonColors.WHITE, true);
 			int dy = y + 16;
-			for (String line : wrap(d.description(), 206)) {
+			for (String line : wrap(d.description(), 166)) {
 				if (dy > y + 38) break;
 				g.text(font, line, rx + 26, dy, 0xFFBBBBBB, false);
 				dy += 10;
@@ -171,6 +178,10 @@ public class LoadoutScreen extends Screen {
 			if (!stats.isEmpty() && dy <= y + 36) g.text(font, stats, rx + 26, y + 36, 0xFF888888, false);
 		}
 		if (cls == MercClass.ENGINEER) g.text(font, "+ Construction PDA (sentry & dispenser)", rx + 26, y0 + 30 + 3 * 52 - 4, 0xFF888888, false);
+	}
+
+	private static boolean exists(Identifier id) {
+		return Minecraft.getInstance().getResourceManager().getResource(id).isPresent();
 	}
 
 	private static String stats(WeaponDef d) {

@@ -47,10 +47,15 @@ Then enable **MercenariesTF2Assets** in *Options → Resource Packs*.
 
 What the script does:
 * reads the game's VPK archives directly (no external tools such as Crowbar or VTFEdit);
-* converts the nine class models (MDL/VVD/VTX) into a mesh format the mod renders. Each mesh is split at the joints into head/body/arms/legs so Minecraft's own walk, swing, sneak and look animations drive it. Both the RED and BLU skins are kept;
+* converts the nine class models (MDL/VVD/VTX) into skinned meshes with their full skeleton, and decodes TF2's own animations (stand / run / crouch / crouch-walk / air / swim for every weapon slot the class uses, including `$includemodel` animation files, sections and `.ani` blocks). The facing direction is measured from each model's own skeleton (hips, shoulders, head), so nothing is assumed about how a model was authored. Both RED and BLU skins are kept;
+* converts each weapon twice: a first-person/inventory version and a third-person version that is bone-merged onto the class skeleton's hand, exactly how TF2 attaches weapons. TF2's own `anim_slot`/`item_slot` decides which animation set the class plays while holding it;
 * uses `scripts/items/items_game.txt` to find each weapon's world model and backpack icon, plus models for projectiles, the sentry and the dispenser;
 * decodes VTF textures (DXT1/3/5 and all common uncompressed formats) to PNG;
-* converts weapon and effect sounds to mono OGG and writes a `sounds.json` that replaces the mod's vanilla fallbacks.
+* converts sounds to mono OGG (with TF2's random variants): per-weapon fire / reload / melee hit / hit-world / draw / empty-click, shared effects, and each class's pain, death, "MEDIC!" and battle-cry voice lines;
+* extracts TF2 HUD and menu art (health cross, ammo panels, meters, crosshair, class-select portraits, leaderboard icons);
+* writes `<pack>_report.txt` next to the pack: which animations, sounds and HUD images were found or missing, plus the sequence names in each class's viewmodel. It contains no Valve content, so it's safe to share when reporting problems.
+
+**After updating the mod, re-run the extractor.** Packs from older versions use a different model format and won't load.
 
 Useful flags: `--list-weapons` (show how each weapon resolved), `--max-texture 2048`, `--player-scale 0.0235`, `--skip-sounds`, and `--orient orient.json` for per-weapon fixes:
 ```json
@@ -69,6 +74,7 @@ Run the extractor's self-test (synthetic data, no TF2 needed): `python tools/tes
 | **Right mouse** (gun held) | Secondary: scope, airblast, detonate stickies, spin minigun, deploy Über, build dispenser |
 | **R** | Reload |
 | **V** | Ability: Spy cloak |
+| **Z** | Call for a Medic (voice line + alert to nearby teammate Medics) |
 | **Jump in mid-air** | Scout double jump |
 | **Sneak + left mouse** with PDA | Destroy your buildings |
 
@@ -113,7 +119,9 @@ This was written without being able to compile or launch it: the build machine c
 | `MeshItemRenderer.java` | `NoDataSpecialModelRenderer.submit` signature |
 | `PlayerModelMixin.java` | `PlayerModel#setupAnim(AvatarRenderState)`. Marked `require = 0`, so if it misses, the vanilla skin draws under the TF2 mesh instead of crashing |
 
-Gameplay simplifications: no disguise kit, teleporters, capture points or random crits. The sniper zoom comes from the movement-speed FOV effect, so it needs *FOV Effects* above 0. Weapons are rigid meshes and characters don't play TF2's own animations; they follow Minecraft's.
+Gameplay simplifications: no disguise kit, teleporters, capture points or random crits. The sniper zoom comes from the movement-speed FOV effect, so it needs *FOV Effects* above 0.
+
+Not done yet: first-person viewmodel animations (TF2's `c_<class>_arms` draw/fire/reload sequences; the report lists their names so they can be mapped next), TF2 gesture layers (firing/reload gestures on the third-person body), aim pose blending (only head look), and the TF2 fonts in the HUD. While a class with an extracted model holds a TF2 weapon, the weapon is drawn on the TF2 hand bone; vanilla's held-item rendering is switched off for those weapons in third person.
 
 ## 6. Legal
 Team Fortress 2, its characters, models, textures and sounds are © Valve Corporation. This is an unofficial fan project, not affiliated with or endorsed by Valve or Mojang. The format readers were written from the publicly documented structures in the [Source SDK 2013](https://github.com/ValveSoftware/source-sdk-2013) headers; no SDK code is included. The mod's own code and placeholder art are MIT licensed (see `LICENSE`).

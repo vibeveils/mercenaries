@@ -42,7 +42,7 @@ def code_for(name):
 
 lang = {
  "key.categories.mercenaries.mercenaries": "Mercenaries", "key.category.mercenaries.mercenaries": "Mercenaries",
- "key.mercenaries.loadout": "Class & loadout", "key.mercenaries.reload": "Reload", "key.mercenaries.ability": "Ability (Spy cloak)",
+ "key.mercenaries.loadout": "Class & loadout", "key.mercenaries.medic": "Call for Medic", "key.mercenaries.reload": "Reload", "key.mercenaries.ability": "Ability (Spy cloak)",
  "entity.mercenaries.projectile": "Projectile", "entity.mercenaries.building": "Building",
 }
 sounds = {}
@@ -58,6 +58,11 @@ for wid, name, cls, slot, kind in weapons:
     (RES / f"models/item/{wid}.json").write_text(json.dumps({"parent": "minecraft:item/handheld", "textures": {"layer0": f"mercenaries:item/{wid}"}}, indent=2))
     (RES / f"items/{wid}.json").write_text(json.dumps({"model": {"type": "minecraft:model", "model": f"mercenaries:item/{wid}"}}, indent=2))
     sounds[f"weapon.{wid}.fire"] = {"sounds": [{"name": FALLBACK.get(kind, "minecraft:entity.generic.explode"), "type": "event", "volume": 0.6}]}
+    sounds[f"weapon.{wid}.reload"] = {"sounds": [{"name": "minecraft:item.crossbow.loading_middle", "type": "event", "volume": 0.5}]}
+    sounds[f"weapon.{wid}.hit"] = {"sounds": [{"name": "minecraft:entity.player.attack.strong", "type": "event", "volume": 0.7}]}
+    sounds[f"weapon.{wid}.hit_world"] = {"sounds": [{"name": "minecraft:block.stone.hit", "type": "event", "volume": 0.7}]}
+    sounds[f"weapon.{wid}.deploy"] = {"sounds": []}
+    sounds[f"weapon.{wid}.empty"] = {"sounds": [{"name": "minecraft:block.dispenser.fail", "type": "event", "volume": 0.5}]}
 
 tile(RES / "textures/item/placeholder.png", "ME", (128, 128, 128), "square")
 
@@ -75,6 +80,13 @@ FX = {"explode": "minecraft:entity.generic.explode", "sticky_detonate": "minecra
       "eat": "minecraft:entity.generic.eat", "drink": "minecraft:entity.generic.drink"}
 for k, v in FX.items():
     sounds[f"fx.{k}"] = {"sounds": [{"name": v, "type": "event", "volume": 0.8}]}
+for cls in CLASS_COL:
+    c = cls.lower()
+    lang[f"subtitles.mercenaries.medic.{c}"] = "MEDIC!"
+    for k in ("pain", "death", "battlecry"):
+        sounds[f"class.{c}.{k}"] = {"sounds": []}   # vanilla already plays hurt/death sounds
+    sounds[f"class.{c}.medic"] = {"sounds": [{"name": "minecraft:entity.villager.ambient", "type": "event", "volume": 0.8}],
+                                  "subtitle": f"subtitles.mercenaries.medic.{c}"}
 (RES / "sounds.json").write_text(json.dumps(sounds, indent=2))
 (RES / "lang/en_us.json").write_text(json.dumps(lang, indent=2, ensure_ascii=False))
 
